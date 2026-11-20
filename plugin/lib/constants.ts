@@ -61,9 +61,6 @@ export function uasColor(ceilingFt: number): string {
 }
 
 export const LINKS = {
-    laanc: 'https://air.aloft.ai/',
-    dronezone: 'https://faadronezone-access.faa.gov/',
-    flightService: 'https://www.1800wxbrief.com/',
     tfrDetail: 'https://tfr.faa.gov/tfr3/?page=detail_',
     uasData: 'https://www.faa.gov/uas/programs_partnerships/data_exchange'
 };

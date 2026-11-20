@@ -3,7 +3,7 @@ import type { Map as MLMap } from 'maplibre-gl';
 import { groundSampler } from './terrain.ts';
 import { COLORS } from './constants.ts';
 import { keysFor, manifest, tile } from './data.ts';
-import { bearing, circle, distanceM, featureContains, FT_PER_M, fmtFt, M_PER_FT } from './geo.ts';
+import { bearing, circle, distanceM, featureContains, FT_PER_M, M_PER_FT } from './geo.ts';
 import type { AirAwareLayers } from './layers.ts';
 import { state, type PlanObstacle, type PlanResult } from './store.ts';
 
@@ -73,16 +73,19 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
         warnings.push(`${missing} sample points had no terrain data and were left out.`);
     }
 
-    const maxGround = samples.length ? Math.max(...samples.map((q) => q.ft)) : undefined;
-    const minGround = samples.length ? Math.min(...samples.map((q) => q.ft)) : undefined;
+    // Everything below is relative to the takeoff point: what the drone's altimeter reads.
+    const base = launchGround ?? 0;
+    const rel = samples.map((q) => ({ ...q, rel: q.ft - base }));
+    const rise = rel.length ? Math.max(...rel.map((q) => q.rel)) : undefined;
+    const drop = rel.length ? Math.min(...rel.map((q) => q.rel)) : undefined;
 
     const result: PlanResult = {
         computedAt: new Date().toISOString(),
         terrain,
         terrainSource: sampler?.source,
         launchGroundFt: launchGround ?? undefined,
-        maxGroundFt: maxGround,
-        minGroundFt: minGround,
+        riseFt: rise,
+        dropFt: drop,
         samples: samples.length,
         obstacles: [],
         obstaclesAbove: 0,
@@ -92,20 +95,18 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
         warnings
     };
 
-    let ceilingMsl: number | undefined;
     const islands: Feature[] = [];
-    if (p.mode === 'need' && maxGround !== undefined) {
-        result.needCeilingMsl = Math.ceil((maxGround + s.heightAboveTerrainFt) / 100) * 100;
-        if (launchGround !== null) result.needCeilingAboveLaunch = result.needCeilingMsl - launchGround;
-        ceilingMsl = result.needCeilingMsl;
-    } else if (p.mode === 'given' && p.givenCeilingMsl) {
-        ceilingMsl = p.givenCeilingMsl;
-        const workable = p.givenCeilingMsl - s.heightAboveTerrainFt;
-        result.givenWorkableGroundFt = workable;
-        if (samples.length) {
+    if (terrain === 'map' && p.mode === 'need' && rise !== undefined) {
+        // Highest ground in the area plus the height you hold over it, rounded up to 10 ft.
+        result.altitudeAgl = Math.ceil((Math.max(0, rise) + s.heightAboveTerrainFt) / 10) * 10;
+    } else if (p.mode === 'given' && p.givenAltitudeAgl) {
+        result.altitudeAgl = p.givenAltitudeAgl;
+        if (terrain === 'map') {
+            const workable = p.givenAltitudeAgl - s.heightAboveTerrainFt;
+            result.workableRiseFt = workable;
             let high = 0;
-            for (const q of samples) {
-                const over = q.ft > workable;
+            for (const q of rel) {
+                const over = q.rel > workable;
                 if (over) high++;
                 islands.push({
                     type: 'Feature',
@@ -113,10 +114,10 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
                     properties: { color: over ? COLORS.island : COLORS.mvfr }
                 });
             }
-            result.givenTooHighPct = Math.round((high / samples.length) * 100);
+            result.tooHighPct = rel.length ? Math.round((high / rel.length) * 100) : undefined;
         }
     } else if (p.mode === 'given') {
-        warnings.push('Type the ceiling you were given (ft MSL).');
+        warnings.push('Enter your max altitude (ft AGL above takeoff).');
     }
     layers.setIslands({ type: 'FeatureCollection', features: islands });
 
@@ -154,6 +155,7 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
                 seen.add(oas);
                 const po: PlanObstacle = {
                     oas, type, lat, lon, aglFt: agl, amslFt: amsl, lighting,
+                    topAboveTakeoffFt: launchGround !== null ? amsl - launchGround : undefined,
                     distanceFt: d * FT_PER_M,
                     bearing: bearing(center, [lon, lat])
                 };
@@ -161,11 +163,23 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
             }
         }
         result.obstacles.sort((a, b) => a.distanceFt - b.distanceFt);
-        if (ceilingMsl !== undefined) {
-            result.obstaclesAbove = result.obstacles.filter((o) => o.amslFt + s.separationFt > ceilingMsl).length;
+        const alt = result.altitudeAgl;
+        if (alt !== undefined) {
+            result.obstaclesAbove = result.obstacles.filter((o) => o.topAboveTakeoffFt !== undefined && o.topAboveTakeoffFt + s.separationFt > alt).length;
         }
     } catch {
         warnings.push('The obstacle file could not be read for this area.');
+    }
+
+    // ---- altitude limits, in drone terms ----
+    const alt = result.altitudeAgl;
+    if (alt !== undefined) {
+        if (alt > 400) warnings.unshift(`${alt} ft AGL is above the Part 107 limit of 400 ft AGL (higher is allowed only within 400 ft of a structure).`);
+        if (result.uasCeilingFt !== undefined && alt > result.uasCeilingFt) {
+            warnings.unshift(result.uasCeilingFt <= 0
+                ? 'The UAS Facility Map grid at takeoff is 0 ft: any flight here needs an FAA authorization.'
+                : `${alt} ft AGL is above the UAS Facility Map ceiling of ${result.uasCeilingFt} ft at takeoff: needs an FAA authorization for that altitude.`);
+        }
     }
 
     // ---- restrictions touching the plan ----
@@ -185,30 +199,4 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
     }
 
     return result;
-}
-
-/** What Flight Service will ask for, ready to read out or paste. Nothing is sent. */
-export function flightServiceText(r: PlanResult | undefined): string {
-    const p = state.plan;
-    const s = state.settings;
-    if (!p.launch) return '';
-    const lat = p.launch.lat, lon = p.launch.lon;
-    const dms = (v: number, pos: string, neg: string): string => {
-        const a = Math.abs(v);
-        const d = Math.floor(a);
-        const m = Math.floor((a - d) * 60);
-        const sec = Math.round(((a - d) * 60 - m) * 60);
-        return `${d}°${String(m).padStart(2, '0')}'${String(sec).padStart(2, '0')}"${v >= 0 ? pos : neg}`;
-    };
-    const ceiling = p.mode === 'given' ? p.givenCeilingMsl : r?.needCeilingMsl;
-    const lines = [
-        'UAS OPERATION',
-        `Launch point: ${lat.toFixed(5)}, ${lon.toFixed(5)} (${dms(lat, 'N', 'S')} ${dms(lon, 'E', 'W')})`,
-        `Area: ${(s.radiusFt / 6076.12).toFixed(2)} NM radius (${Math.round(s.radiusFt).toLocaleString('en-US')} ft) around the launch point`,
-        `Ceiling: ${ceiling ? fmtFt(ceiling) + ' MSL' : '—'}` + (r?.needCeilingAboveLaunch && p.mode === 'need' ? ` (${fmtFt(r.needCeilingAboveLaunch)} above launch)` : ''),
-        `Ground elevation at launch: ${fmtFt(r?.launchGroundFt)} MSL`,
-        'Time: ____ to ____ local',
-        'Operator / contact: ____'
-    ];
-    return lines.join('\n');
 }

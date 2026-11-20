@@ -660,7 +660,7 @@ export class AirAwareLayers {
         let hidden = 0;
         for (const t of tiles) {
             for (const o of t?.obstacles || []) {
-                const [oas, type, lat, lon, agl, amsl, lighting] = o;
+                const [oas, type, lat, lon, agl, , lighting] = o;
                 this.obstacles.set(oas, o);
                 if (lat < v.s || lat > v.n || lon < v.w || lon > v.e) continue;
                 if (agl < min || (types.size && !types.has(type))) {
@@ -671,7 +671,7 @@ export class AirAwareLayers {
                 features.push({
                     type: 'Feature',
                     geometry: { type: 'Point', coordinates: [lon, lat] },
-                    properties: { aaid: id, color: COLORS.obstacle, label: `${agl}' (${amsl.toLocaleString('en-US')})`, agl, lighting }
+                    properties: { aaid: id, color: COLORS.obstacle, label: `${agl}' AGL`, agl, lighting }
                 });
                 if (features.length >= 20_000) break;
             }
@@ -731,10 +731,9 @@ export class AirAwareLayers {
                     rows: [
                         { label: 'Ceiling', value: Number(p.ceiling) <= 0 ? '0 ft — no automatic authorization' : `${p.ceiling} ft AGL` },
                         { label: 'Airport', value: String(p.airport || '—') },
-                        { label: 'Cell', value: `${e.lngLat.lat.toFixed(4)}, ${e.lngLat.lng.toFixed(4)}` },
-                        { label: 'File LAANC', value: 'LAANC supplier', href: LINKS.laanc }
+                        { label: 'Cell', value: `${e.lngLat.lat.toFixed(4)}, ${e.lngLat.lng.toFixed(4)}` }
                     ],
-                    text: 'The facility map is the altitude up to which LAANC can grant an authorization automatically. Above it, or where it is 0, request through FAA DroneZone.'
+                    text: 'The highest altitude (ft AGL) LAANC can authorize automatically in this grid square. Above it, or where it is 0, you need a further FAA authorization.'
                 });
                 continue;
             }
@@ -828,14 +827,13 @@ function airportName(s: string | undefined): string {
 }
 
 function obstacleDetail(o: ObstacleRow): Detail {
-    const [oas, type, lat, lon, agl, amsl, lighting, verified, quantity, city, st] = o;
+    const [oas, type, lat, lon, agl, , lighting, verified, quantity, city, st] = o;
     return {
         title: `${type} ${agl} ft AGL`,
         subtitle: [city, st].filter(Boolean).join(', '),
         color: COLORS.obstacle,
         rows: [
             { label: 'Height', value: `${agl.toLocaleString('en-US')} ft AGL` },
-            { label: 'Top', value: `${amsl.toLocaleString('en-US')} ft MSL` },
             { label: 'Lighting', value: lightingName(lighting) },
             { label: 'Verified', value: verified === 'O' ? 'Verified' : verified === 'U' ? 'Unverified' : verified },
             { label: 'Quantity', value: String(quantity) },

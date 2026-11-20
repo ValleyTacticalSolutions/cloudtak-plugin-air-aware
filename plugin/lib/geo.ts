@@ -109,8 +109,15 @@ export function fmtFt(ft: number | undefined): string {
 }
 
 export function fmtDist(ft: number): string {
-    if (ft < 5280 / 2) return Math.round(ft).toLocaleString('en-US') + ' ft';
-    return (ft / 6076.12).toFixed(2) + ' NM';
+    if (ft < 1000) return Math.round(ft).toLocaleString('en-US') + ' ft';
+    return (ft / 5280).toFixed(2).replace(/\.?0+$/, '') + ' mi';
+}
+
+/** Signed height relative to takeoff, e.g. "+120 ft" / "-40 ft". */
+export function fmtRel(ft: number | undefined): string {
+    if (ft === undefined || !isFinite(ft)) return '—';
+    const r = Math.round(ft);
+    return (r > 0 ? '+' : '') + r.toLocaleString('en-US') + ' ft';
 }
 
 export function fmtTime(iso: string | number | undefined): string {

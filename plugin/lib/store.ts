@@ -87,6 +87,8 @@ export interface PlanObstacle {
     lon: number;
     aglFt: number;
     amslFt: number;
+    /** Top of the obstacle relative to the takeoff point, when terrain is known. */
+    topAboveTakeoffFt?: number;
     lighting: string;
     distanceFt: number;
     bearing: number;
@@ -97,16 +99,17 @@ export interface PlanResult {
     terrain: 'map' | 'none';
     /** Where the ground elevation came from. */
     terrainSource?: string;
+    /** Ground at the takeoff point, ft MSL (internal reference only). */
     launchGroundFt?: number;
-    maxGroundFt?: number;
-    minGroundFt?: number;
+    /** Highest / lowest ground in the area relative to takeoff, ft (+ above, - below). */
+    riseFt?: number;
+    dropFt?: number;
     samples: number;
-    /** Need-a-ceiling: the MSL ceiling to request, rounded up to 100 ft. */
-    needCeilingMsl?: number;
-    needCeilingAboveLaunch?: number;
-    /** Given-a-ceiling readouts. */
-    givenWorkableGroundFt?: number;
-    givenTooHighPct?: number;
+    /** The altitude the plan uses, ft AGL above takeoff (found, or the one entered). */
+    altitudeAgl?: number;
+    /** Limit mode: the highest ground you can work over, relative to takeoff. */
+    workableRiseFt?: number;
+    tooHighPct?: number;
     uasCeilingFt?: number;
     uasAirport?: string;
     obstacles: PlanObstacle[];
@@ -121,7 +124,8 @@ export interface PlanState {
     picking: boolean;
     launch?: { lon: number; lat: number };
     mode: 'need' | 'given';
-    givenCeilingMsl?: number;
+    /** Limit mode: max altitude entered, ft AGL above takeoff. */
+    givenAltitudeAgl?: number;
     computing: boolean;
     result?: PlanResult;
 }

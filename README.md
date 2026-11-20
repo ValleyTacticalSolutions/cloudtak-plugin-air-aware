@@ -21,13 +21,14 @@ Eight layers, each switched on or off on its own:
 
 Tapping anything on the map opens its details. They appear in the sidebar's **Details** tab, or in a floating pane if the sidebar is closed.
 
-**UAS planner** (Planner tab):
-- Set a launch point by tapping the map or using the map centre. The plan covers a circle of configurable radius around it.
-- **Need a ceiling**: highest ground in the area + your height above terrain, rounded up to the next 100 ft. It is shown as MSL and as height above the launch point.
-- **Given a ceiling**: the highest ground you can work over, plus the share of the area that is too high. Too-high ground is painted red and workable ground blue.
-- Obstacles in the area are listed nearest first, with height, top, lighting, distance and bearing. Any that reach the ceiling (with your separation added) are flagged.
-- It shows the UAS Facility Map ceiling at the launch point, and any TFR, UAS No-Fly area or airspace touching the plan.
-- Links to LAANC (an FAA-approved supplier), FAA DroneZone and Flight Service. A Copy button gives the plan's numbers as text for the Flight Service call. Nothing is filed or sent.
+**UAS planner** (Planner tab). Every height is in ft AGL from the takeoff point, the way the drone's altimeter reads it:
+- Set a takeoff point by tapping the map or using the map centre.
+- Pick the operating range: ¼, ½, 1 or 1½ mi, or a custom distance. The ring on the map follows the choice immediately.
+- **Find my altitude**: the highest ground in range relative to takeoff, plus the height you hold over the terrain (default 400 ft), rounded up to the next 10 ft.
+- **I have an altitude limit**: enter your max altitude in ft AGL. It shows the highest ground you can work over and how much of the range is too high (red on the map, blue workable).
+- Terrain in range is shown relative to takeoff (for example −40 ft to +320 ft).
+- Obstacles in range are listed nearest first, with their height, top relative to takeoff, lighting, distance and direction. Any that reach your altitude (with your clearance added) are flagged.
+- Shows the UAS Facility Map ceiling at takeoff, and any TFR, UAS No-Fly area or airspace touching the range. It warns when your altitude is over 400 ft AGL (Part 107) or over the facility map ceiling.
 
 Settings (layers, obstacle filters, planner numbers) are stored per browser.
 
@@ -38,12 +39,10 @@ Settings (layers, obstacle filters, planner numbers) are stored per browser.
 3. Tap a feature to read its details.
 4. The planner reads ground elevation from CloudTAK's terrain, with 3D terrain on or off. It tries the terrain (raster-dem) overlay on the map first, then the server's **Default Terrain** (Admin → Config → Map, for example as set by the Terrain Data Downloader plugin), then MapLibre's 3D terrain. The readout names which one it used. Where none of these has data, it says so and computes nothing.
 
-**Advisory only.** Everything Air Aware draws is a picture of published data at the time it reached CloudTAK. It is not a clearance, and it does not replace charts, NOTAMs or a briefing.
-
 ### Differences from the ATAK plugin
 
 - No offline tile store. CloudTAK's API server caches the data in memory instead (manifests for hours, NOTAMs for 3 minutes, TFRs for 5 minutes, METARs for 5 minutes).
-- The planner uses a circle around the launch point. Drawn-polygon plan areas and "make a geofence from a restriction" are not ported yet.
+- The planner uses a range ring around the takeoff point and works in AGL from takeoff. Drawn-polygon plan areas, "make a geofence from a restriction", and the LAANC / DroneZone / Flight Service links are not included.
 - Terrain comes from CloudTAK's terrain (DEM overlay or the server's Default Terrain), not ATAK's elevation data. The default height above terrain is 400 ft.
 - 3D volumes start at the map's ground plane and are not corrected for terrain. Read the published numbers on the details page.
 

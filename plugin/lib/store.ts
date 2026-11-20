@@ -1,7 +1,7 @@
 import { reactive, watch } from 'vue';
 import type { LayerKey } from './constants.ts';
 
-const STORAGE_KEY = 'air-aware-settings-v1';
+const STORAGE_KEY = 'air-aware-settings-v2';
 
 export interface Settings {
     layers: Record<LayerKey, boolean>;
@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
     obstacleTypes: [],
     volumes: false,
     activeTfrOnly: false,
-    heightAboveTerrainFt: 200,
+    heightAboveTerrainFt: 400,
     separationFt: 100,
     radiusFt: 2640
 };
@@ -95,6 +95,8 @@ export interface PlanObstacle {
 export interface PlanResult {
     computedAt: string;
     terrain: 'map' | 'none';
+    /** Where the ground elevation came from. */
+    terrainSource?: string;
     launchGroundFt?: number;
     maxGroundFt?: number;
     minGroundFt?: number;

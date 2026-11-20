@@ -1,5 +1,6 @@
 import type { Feature, FeatureCollection, Position } from 'geojson';
 import type { Map as MLMap } from 'maplibre-gl';
+import { groundSampler } from './terrain.ts';
 import { COLORS } from './constants.ts';
 import { keysFor, manifest, tile } from './data.ts';
 import { bearing, circle, distanceM, featureContains, FT_PER_M, fmtFt, M_PER_FT } from './geo.ts';
@@ -9,17 +10,6 @@ import { state, type PlanObstacle, type PlanResult } from './store.ts';
 type ObstacleRow = [string, string, number, number, number, number, string, string, number, string, string];
 
 const GRID = 25;
-
-function groundFt(map: MLMap, lon: number, lat: number): number | null {
-    try {
-        const raw = map.queryTerrainElevation([lon, lat]);
-        if (raw === null || raw === undefined || !isFinite(raw)) return null;
-        const ex = map.getTerrain()?.exaggeration || 1;
-        return (raw / ex) * FT_PER_M;
-    } catch {
-        return null;
-    }
-}
 
 export function planShape(): FeatureCollection {
     const p = state.plan;
@@ -58,7 +48,9 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
     const south = Math.min(...lats), north = Math.max(...lats);
     const west = Math.min(...lons), east = Math.max(...lons);
 
-    const launchGround = groundFt(map, center[0], center[1]);
+    const { sampler, tried } = await groundSampler(map, south, west, north, east);
+    const groundFt = (lon: number, lat: number): number | null => sampler ? sampler.sample(lon, lat) : null;
+    const launchGround = groundFt(center[0], center[1]);
     const samples: Array<{ lon: number; lat: number; ft: number }> = [];
     let missing = 0;
     for (let i = 0; i < GRID; i++) {
@@ -66,7 +58,7 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
             const lat = south + (north - south) * (i + 0.5) / GRID;
             const lon = west + (east - west) * (j + 0.5) / GRID;
             if (distanceM(center, [lon, lat]) > radiusM) continue;
-            const ft = groundFt(map, lon, lat);
+            const ft = groundFt(lon, lat);
             if (ft === null) {
                 missing++;
                 continue;
@@ -76,9 +68,9 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
     }
     const terrain = samples.length && launchGround !== null ? 'map' : 'none';
     if (terrain === 'none') {
-        warnings.push('No terrain data: turn on a terrain overlay in CloudTAK (Overlays → Terrain) and keep the plan area on screen. Nothing was computed from data that is not there.');
+        warnings.push(`No terrain data for this area (tried: ${tried.join('; ') || 'nothing'}). Nothing was computed from data that is not there.`);
     } else if (missing) {
-        warnings.push(`${missing} sample points had no terrain loaded and were left out. Keep the whole circle on screen for a complete read.`);
+        warnings.push(`${missing} sample points had no terrain data and were left out.`);
     }
 
     const maxGround = samples.length ? Math.max(...samples.map((q) => q.ft)) : undefined;
@@ -87,6 +79,7 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
     const result: PlanResult = {
         computedAt: new Date().toISOString(),
         terrain,
+        terrainSource: sampler?.source,
         launchGroundFt: launchGround ?? undefined,
         maxGroundFt: maxGround,
         minGroundFt: minGround,

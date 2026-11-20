@@ -36,7 +36,7 @@ Settings (layers, obstacle filters, planner numbers) are stored per browser.
 1. Open the CloudTAK main menu and choose **Air Aware**.
 2. In **Layers**, switch on what you need. Each layer's status line says what it is showing and what it is *not* showing (for example, zoom gates or unreachable sources). A quiet map is not an empty sky.
 3. Tap a feature to read its details.
-4. For the planner, turn on a **terrain overlay** in CloudTAK first. The planner reads ground elevation from the map's terrain and will not compute a ceiling without it. Keep the whole plan circle on screen.
+4. The planner reads ground elevation from CloudTAK's terrain, with 3D terrain on or off. It tries the terrain (raster-dem) overlay on the map first, then the server's **Default Terrain** (Admin → Config → Map, for example as set by the Terrain Data Downloader plugin), then MapLibre's 3D terrain. The readout names which one it used. Where none of these has data, it says so and computes nothing.
 
 **Advisory only.** Everything Air Aware draws is a picture of published data at the time it reached CloudTAK. It is not a clearance, and it does not replace charts, NOTAMs or a briefing.
 
@@ -44,7 +44,7 @@ Settings (layers, obstacle filters, planner numbers) are stored per browser.
 
 - No offline tile store. CloudTAK's API server caches the data in memory instead (manifests for hours, NOTAMs for 3 minutes, TFRs for 5 minutes, METARs for 5 minutes).
 - The planner uses a circle around the launch point. Drawn-polygon plan areas and "make a geofence from a restriction" are not ported yet.
-- Terrain comes from CloudTAK's map terrain (DEM overlay), not ATAK's elevation data.
+- Terrain comes from CloudTAK's terrain (DEM overlay or the server's Default Terrain), not ATAK's elevation data. The default height above terrain is 400 ft.
 - 3D volumes start at the map's ground plane and are not corrected for terrain. Read the published numbers on the details page.
 
 ## TAK Portal Marketplace
@@ -60,7 +60,7 @@ Settings (layers, obstacle filters, planner numbers) are stored per browser.
    No action is needed if the server already has normal internet egress.
 3. After install: **Settings → Refresh App** in CloudTAK (a normal browser refresh is not enough).
 
-For the planner, users also need a terrain overlay enabled in CloudTAK. That is a per-user map setting, not server configuration.
+For the planner's ground readouts, CloudTAK needs terrain data: either a **Default Terrain** set under Admin → Config → Map (for example by the Terrain Data Downloader plugin), or a terrain overlay that users add themselves. Without one, the planner says there is no terrain and computes nothing.
 
 ### Catalog entry
 ```json

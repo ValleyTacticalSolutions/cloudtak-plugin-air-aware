@@ -107,7 +107,7 @@
                 class='small text-secondary'
             >
                 Set a launch point. The plan covers a circle around it ({{ fmtDist(state.settings.radiusFt) }}, change in Settings).
-                It needs a terrain overlay turned on in CloudTAK to read the ground.
+                Ground elevation comes from CloudTAK's terrain (the map's DEM overlay or the server's default terrain).
                 <button
                     type='button'
                     class='btn btn-link btn-sm p-0'
@@ -207,6 +207,9 @@
 
                     <table class='table table-sm mt-2 aa-table'>
                         <tbody>
+                            <tr v-if='r.terrainSource'>
+                                <td>Terrain</td><td>{{ r.terrainSource }}</td>
+                            </tr>
                             <tr>
                                 <td>Ground at launch</td><td>{{ fmtFt(r.launchGroundFt) }}</td>
                             </tr>

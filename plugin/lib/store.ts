@@ -23,7 +23,7 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
     layers: {
-        tfr: true,
+        tfr: false,
         notams: false,
         airspace: false,
         sua: false,

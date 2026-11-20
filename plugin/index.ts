@@ -1,7 +1,7 @@
 import type { App } from 'vue';
 import { h, markRaw } from 'vue';
 import type { PluginAPI, PluginInstance } from '@tak-ps/cloudtak';
-import { IconPlaneTilt } from '@tabler/icons-vue';
+import { IconDrone } from '@tabler/icons-vue';
 import MenuTemplate from '../../src/components/CloudTAK/util/MenuTemplate.vue';
 import AirAwarePanel from './lib/AirAwarePanel.vue';
 import DetailsView from './lib/DetailsView.vue';
@@ -52,7 +52,7 @@ export default class AirAware implements PluginInstance {
             route: ROUTE_NAME,
             tooltip: 'Air Aware',
             description: 'TFRs, NOTAMs, airspace, UAS ceilings, no-fly zones, obstacles, METARs and a UAS flight planner',
-            icon: IconPlaneTilt
+            icon: IconDrone
         });
     }
 

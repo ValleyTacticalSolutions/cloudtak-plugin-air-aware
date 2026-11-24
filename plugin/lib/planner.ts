@@ -109,27 +109,6 @@ function cellFeature(c: UasCellHit): Feature {
     };
 }
 
-export interface PointInfo {
-    groundFt?: number;
-    ceilingFt?: number;
-    airport?: string;
-    /** On the facility map at all; false means no LAANC grid here. */
-    onGrid: boolean;
-}
-
-/** Ground elevation and UAS grid ceiling at one point, for the step summaries. */
-export async function pointInfo(map: MLMap, lon: number, lat: number): Promise<PointInfo> {
-    const d = 0.002;
-    const [ground, cells] = await Promise.all([
-        groundSampler(map, lat - d, lon - d, lat + d, lon + d).catch(() => ({ sampler: null })),
-        uasCellsIn(lat, lon, lat, lon).catch(() => [] as UasCellHit[])
-    ]);
-    const li = Math.floor(lat * UAS_PER_DEG), lo = Math.floor(lon * UAS_PER_DEG);
-    const cell = cells.find((c) => c.li === li && c.lo === lo);
-    const g = ground.sampler ? ground.sampler.sample(lon, lat) : null;
-    return { groundFt: g ?? undefined, ceilingFt: cell?.ceilingFt, airport: cell?.airport, onGrid: Boolean(cell) };
-}
-
 export interface PlanOutput {
     result: PlanResult;
     hazards: FeatureCollection;
@@ -165,25 +144,18 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
     const homeGround = groundFt(g.home[0], g.home[1]);
     const targetGround = groundFt(g.target[0], g.target[1]);
     const samples: Array<{ lon: number; lat: number; ft: number }> = [];
-    let missing = 0;
     for (let i = 0; i < GRID; i++) {
         for (let j = 0; j < GRID; j++) {
             const lat = south + (north - south) * (i + 0.5) / GRID;
             const lon = west + (east - west) * (j + 0.5) / GRID;
             if (!inArea([lon, lat], g.area)) continue;
             const ft = groundFt(lon, lat);
-            if (ft === null) {
-                missing++;
-                continue;
-            }
-            samples.push({ lon, lat, ft });
+            if (ft !== null) samples.push({ lon, lat, ft });
         }
     }
     const terrain = samples.length && homeGround !== null ? 'map' : 'none';
     if (terrain === 'none') {
-        warnings.push(`No terrain data for this area (tried: ${tried.join('; ') || 'nothing'}). Ground clearance was not checked.`);
-    } else if (missing) {
-        warnings.push(`${missing} sample points had no terrain data and were left out.`);
+        warnings.push(`No terrain data (tried: ${tried.join('; ') || 'nothing'}): obstacle tops are not known relative to Home.`);
     }
     // Everything below is relative to Home: what the drone's altimeter reads.
     const base = homeGround ?? 0;
@@ -203,14 +175,16 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
         warnings.push(`The flight area reaches ${fmtDist(maxReachFt)} from Home, past your ${fmtDist(s.radiusFt)} operating range.`);
     }
 
-    // ---- UAS Facility Map across the area ----
+    // ---- UAS Facility Map: drawn across the whole range, ceiling from the flight area ----
     const cells: PlanUasCell[] = [];
     try {
-        for (const c of await uasCellsIn(south, west, north, east)) {
+        const range = makeArea([circle(g.home, s.radiusFt * M_PER_FT)]);
+        const [rw, rs, re, rn] = range.bbox;
+        for (const c of await uasCellsIn(Math.min(south, rs), Math.min(west, rw), Math.max(north, rn), Math.max(east, re))) {
             const f = cellFeature(c);
-            if (!overlapsArea(f, g.area)) continue;
-            cells.push({ ceilingFt: c.ceilingFt, airport: c.airport });
-            hazards.push(f);
+            const inFlight = overlapsArea(f, g.area);
+            if (inFlight) cells.push({ ceilingFt: c.ceilingFt, airport: c.airport });
+            if (inFlight || overlapsArea(f, range)) hazards.push(f);
         }
     } catch {
         warnings.push('The UAS Facility Map could not be read for this area.');
@@ -248,28 +222,22 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
     const tops = obstacles.map((o) => o.topAboveTakeoffFt).filter((t): t is number => t !== undefined);
     const obstacleNeedAgl = tops.length ? Math.ceil((Math.max(...tops) + s.separationFt) / 10) * 10 : undefined;
 
-    // ---- altitude window ----
-    // The legal ceiling is the lower of 400 ft and the lowest grid over the area. Where the ground
-    // drops below Home, the same altimeter reading is that much higher above the ground.
+    // ---- altitude ----
+    // The legal ceiling is the lower of 400 ft and the lowest grid over the flight area.
+    // Without a grid below 400 ft, a taller obstacle may take the plan above 400 ft, and only
+    // that far. A published grid ceiling is never exceeded.
     const capFt = Math.max(0, Math.min(PART_107_FT, lowestGrid ?? PART_107_FT));
-    const maxAltitudeAgl = Math.max(0, Math.floor((capFt + (drop ?? 0)) / 10) * 10);
-    const floorAgl = rise !== undefined ? Math.ceil((rise + s.heightAboveTerrainFt) / 10) * 10 : undefined;
-    // Without a grid below 400 ft, clearing terrain and obstacles may take the plan above 400 ft,
-    // and only that far. A published grid ceiling is never exceeded.
+    const maxAltitudeAgl = capFt;
     const gridBinds = lowestGrid !== undefined && lowestGrid < PART_107_FT;
-    const needs = [floorAgl, obstacleNeedAgl].filter((n): n is number => n !== undefined);
-    const needAgl = needs.length ? Math.max(...needs) : undefined;
-    const allowedMaxAgl = gridBinds ? maxAltitudeAgl : Math.max(maxAltitudeAgl, needAgl ?? 0);
-    const raisedBy = !gridBinds && needAgl !== undefined && needAgl > maxAltitudeAgl
-        ? (obstacleNeedAgl !== undefined && obstacleNeedAgl === needAgl ? 'obstacle' : 'terrain')
-        : undefined;
+    const allowedMaxAgl = gridBinds ? maxAltitudeAgl : Math.max(maxAltitudeAgl, obstacleNeedAgl ?? 0);
+    const raisedBy = allowedMaxAgl > maxAltitudeAgl ? 'obstacle' as const : undefined;
 
     let altitudeAgl: number | undefined;
     let clamped = false;
     if (lowestGrid !== undefined && lowestGrid <= 0) {
         warnings.unshift('A UAS Facility Map grid of 0 overlaps the flight area: any flight there needs an FAA authorization.');
     } else if (p.mode === 'need') {
-        altitudeAgl = Math.min(needAgl ?? maxAltitudeAgl, allowedMaxAgl);
+        altitudeAgl = allowedMaxAgl;
     } else if (p.givenAltitudeAgl) {
         altitudeAgl = p.givenAltitudeAgl;
         if (altitudeAgl > allowedMaxAgl) {
@@ -280,28 +248,11 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
         warnings.push('Enter your altitude above Home.');
     }
 
-    if (altitudeAgl !== undefined && needAgl !== undefined && needAgl > allowedMaxAgl) {
-        warnings.unshift(`Clearing terrain and obstacles needs ${fmtH(needAgl)}; the ${fmtH(lowestGrid)} grid caps you at ${fmtH(allowedMaxAgl)}.`);
+    if (altitudeAgl !== undefined && obstacleNeedAgl !== undefined && obstacleNeedAgl > allowedMaxAgl) {
+        warnings.unshift(`Clearing the tallest obstacle needs ${fmtH(obstacleNeedAgl)}; the ${fmtH(lowestGrid)} grid caps you at ${fmtH(allowedMaxAgl)}.`);
     }
 
-    // ---- terrain the altitude cannot clear ----
     const islands: Feature[] = [];
-    let tooHighPct: number | undefined;
-    if (terrain === 'map' && altitudeAgl !== undefined) {
-        const workable = altitudeAgl - s.heightAboveTerrainFt;
-        let high = 0;
-        for (const q of rel) if (q.rel > workable) high++;
-        tooHighPct = rel.length ? Math.round((high / rel.length) * 100) : undefined;
-        if (high) {
-            for (const q of rel) {
-                islands.push({
-                    type: 'Feature',
-                    geometry: { type: 'Point', coordinates: [q.lon, q.lat] },
-                    properties: { color: q.rel > workable ? COLORS.island : COLORS.mvfr }
-                });
-            }
-        }
-    }
 
     // ---- obstacles that reach the altitude ----
     let obstaclesAbove = 0;
@@ -382,7 +333,6 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
         gimbalDeg,
         transitMin,
         onStationMin,
-        floorAgl,
         obstacleNeedAgl,
         maxAltitudeAgl,
         allowedMaxAgl,
@@ -390,7 +340,6 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
         capFt,
         altitudeAgl,
         clamped,
-        tooHighPct,
         uasCells: cells,
         uasCeilingUsedFt: lowestGrid,
         obstacles,

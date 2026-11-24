@@ -92,18 +92,13 @@
             class='d-flex flex-column gap-3 px-2'
         >
             <!-- Home -->
-            <section>
+            <section v-if='!state.plan.home'>
                 <div class='aa-step'>
                     <IconHome
                         :size='18'
                         stroke='1.5'
                     />
                     Home / Takeoff Point
-                    <IconCheck
-                        v-if='state.plan.home'
-                        :size='16'
-                        class='text-success ms-auto'
-                    />
                 </div>
                 <TablerButton
                     class='aa-action w-100'
@@ -118,31 +113,16 @@
                     />
                     {{ state.plan.picking === 'home' ? 'Click The Map…' : 'Click Map To Set Home' }}
                 </TablerButton>
-                <div
-                    v-if='state.plan.home'
-                    class='aa-sub'
-                >
-                    {{ fmtLL(state.plan.home) }}
-                    <template v-if='homeInfo'>
-                        <span v-if='homeInfo.groundFt !== undefined'> · {{ fmtH(homeInfo.groundFt) }} MSL</span>
-                        <span> · {{ homeInfo.onGrid ? `Grid ${fmtH(homeInfo.ceilingFt)}` : 'No grid' }}</span>
-                    </template>
-                </div>
             </section>
 
             <!-- Target -->
-            <section v-if='state.plan.home'>
+            <section v-if='state.plan.home && !state.plan.target'>
                 <div class='aa-step'>
                     <IconTarget
                         :size='18'
                         stroke='1.5'
                     />
                     Target / Area Of Interest
-                    <IconCheck
-                        v-if='state.plan.target'
-                        :size='16'
-                        class='text-success ms-auto'
-                    />
                 </div>
                 <div class='d-flex flex-column gap-2'>
                     <TablerButton
@@ -171,19 +151,6 @@
                         Set Home As Target
                     </TablerButton>
                 </div>
-                <div
-                    v-if='state.plan.target'
-                    class='aa-sub'
-                >
-                    <template v-if='targetDistanceFt < 3'>
-                        At Home
-                    </template>
-                    <template v-else>
-                        {{ fmtDist(targetDistanceFt) }} {{ compass(targetBearing) }} ({{ Math.round(targetBearing) }}°)
-                        <span v-if='targetRel !== undefined'> · Ground {{ fmtRel(targetRel) }}</span>
-                    </template>
-                    <span v-if='targetInfo?.onGrid'> · Grid {{ fmtH(targetInfo.ceilingFt) }}</span>
-                </div>
             </section>
 
             <template v-if='planOn'>
@@ -196,8 +163,11 @@
                         />
                         Mission
                     </div>
+                    <div class='aa-sub mt-0'>
+                        Target {{ targetDistanceFt < 3 ? 'at Home' : `${fmtDist(targetDistanceFt)} ${compass(targetBearing)} (${Math.round(targetBearing)}°)` }}
+                    </div>
                     <div class='aa-label'>
-                        Range
+                        Max Distance From Operator
                     </div>
                     <TablerPillGroup
                         v-model='rangeKey'
@@ -224,7 +194,7 @@
                         <span class='input-group-text'>{{ dUnit() }}</span>
                     </div>
                     <div class='aa-label'>
-                        Standoff
+                        Target Standoff Distance
                     </div>
                     <TablerPillGroup
                         v-model='standoffKey'
@@ -248,6 +218,32 @@
                             placeholder='Standoff'
                         >
                         <span class='input-group-text'>{{ hUnit() }}</span>
+                    </div>
+                    <div class='aa-label'>
+                        Corridor Buffer
+                    </div>
+                    <TablerPillGroup
+                        v-model='bufferKey'
+                        class='aa-pills'
+                        :options='bufferOptions'
+                        :rounded='false'
+                        size='default'
+                        padding=''
+                        name='air-aware-buffer'
+                    />
+                    <div
+                        v-if='bufferKey === "custom"'
+                        class='input-group mt-1'
+                    >
+                        <input
+                            v-model.number='customBuffer'
+                            type='number'
+                            min='10'
+                            :step='metric() ? 5 : 25'
+                            class='form-control'
+                            placeholder='Buffer'
+                        >
+                        <span class='input-group-text'>{{ hUnit() }} each side</span>
                     </div>
                     <div
                         v-if='r?.gimbalDeg !== undefined && r.altitudeAgl !== undefined'
@@ -325,25 +321,16 @@
                             Max {{ fmtH(r.allowedMaxAgl) }} · {{ maxReason }}
                         </div>
                         <div
-                            v-if='r.floorAgl !== undefined || r.obstacleNeedAgl !== undefined'
+                            v-if='r.obstacleNeedAgl !== undefined'
                             class='aa-sub'
                         >
-                            Needs
-                            <span v-if='r.floorAgl !== undefined'>{{ fmtH(r.floorAgl) }} terrain</span>
-                            <span v-if='r.floorAgl !== undefined && r.obstacleNeedAgl !== undefined'> · </span>
-                            <span v-if='r.obstacleNeedAgl !== undefined'>{{ fmtH(r.obstacleNeedAgl) }} obstacles</span>
+                            Tallest obstacle needs {{ fmtH(r.obstacleNeedAgl) }}
                         </div>
                         <div
                             v-if='r.clamped || clampNote'
                             class='aa-sub text-warning'
                         >
                             Lowered to {{ fmtH(r.allowedMaxAgl) }}.
-                        </div>
-                        <div
-                            v-if='r.tooHighPct'
-                            class='aa-sub text-warning'
-                        >
-                            {{ r.tooHighPct }}% of the area is too high (red on the map).
                         </div>
                     </template>
                 </section>
@@ -539,28 +526,12 @@
             <div class='fw-bold mt-2'>
                 UAS Flight Planner
             </div>
-            <label class='form-label mb-0'>Height Over Terrain ({{ hUnit() }})</label>
-            <input
-                v-model.number='heightOverTerrain'
-                type='number'
-                min='0'
-                step='10'
-                class='form-control'
-            >
             <label class='form-label mb-0'>Obstacle Clearance ({{ hUnit() }})</label>
             <input
                 v-model.number='separation'
                 type='number'
                 min='0'
                 step='10'
-                class='form-control'
-            >
-            <label class='form-label mb-0'>Corridor Half-Width ({{ hUnit() }})</label>
-            <input
-                v-model.number='corridor'
-                type='number'
-                min='25'
-                step='25'
                 class='form-control'
             >
             <label class='form-label mb-0'>Cruise Speed ({{ sUnit() }})</label>
@@ -626,7 +597,6 @@ import { TablerButton, TablerPillGroup } from '@tak-ps/vue-tabler';
 import {
     IconAlertTriangle,
     IconCamera,
-    IconCheck,
     IconEyeOff,
     IconHome,
     IconListCheck,
@@ -640,7 +610,7 @@ import {
 import { LAYERS } from './constants.ts';
 import { state, DEFAULT_SETTINGS, type Pick } from './store.ts';
 import { runtime } from './runtime.ts';
-import { clearPlan, computePlan, planShape, pointInfo, PART_107_FT, type PointInfo } from './planner.ts';
+import { clearPlan, computePlan, planShape, PART_107_FT } from './planner.ts';
 import { bearing, compass, distanceM, FT_PER_M } from './geo.ts';
 import { dUnit, fmtDist, fmtH, fmtRel, fromD, fromH, fromS, hUnit, metric, sUnit, toD, toH, toS } from './units.ts';
 import { planActive } from './layers.ts';
@@ -721,6 +691,38 @@ watch(customStandoff, (v) => {
     if (typeof v === 'number' && isFinite(v) && v >= 0 && v <= 26400) state.settings.standoffFt = fromH(v);
 });
 
+// ---- corridor buffer (each side of the track) ----
+
+const bufferPresets = computed(() => metric()
+    ? [{ v: 30, label: '30 m' }, { v: 75, label: '75' }, { v: 150, label: '150' }, { v: 300, label: '300' }]
+    : [{ v: 100, label: '100 ft' }, { v: 250, label: '250' }, { v: 500, label: '500' }, { v: 1000, label: '1000' }]);
+const bufferOptions = computed(() => [
+    ...bufferPresets.value.map((o) => ({ value: String(o.v), label: o.label })),
+    { value: 'custom', label: 'Custom' }
+]);
+const bufferNow = (): number => Math.round(toH(state.settings.corridorFt));
+const isBufferPreset = (): boolean => bufferPresets.value.some((o) => o.v === bufferNow());
+const customBufferOn = ref(!isBufferPreset());
+const customBuffer = ref<number | undefined>(bufferNow());
+
+const bufferKey = computed({
+    get: () => customBufferOn.value ? 'custom' : String(bufferNow()),
+    set: (v: string) => {
+        if (v === 'custom') {
+            customBufferOn.value = true;
+            customBuffer.value = bufferNow();
+            return;
+        }
+        customBufferOn.value = false;
+        state.settings.corridorFt = fromH(Number(v));
+    }
+});
+
+watch(customBuffer, (v) => {
+    if (!customBufferOn.value) return;
+    if (typeof v === 'number' && isFinite(v) && v >= 10 && v <= 26400) state.settings.corridorFt = fromH(v);
+});
+
 // ---- units ----
 
 const unitOptions = [
@@ -729,7 +731,7 @@ const unitOptions = [
 ];
 
 /** A setting kept in feet, edited in the display unit. */
-function heightModel(key: 'obstacleMinFt' | 'heightAboveTerrainFt' | 'separationFt' | 'corridorFt') {
+function heightModel(key: 'obstacleMinFt' | 'separationFt') {
     return computed({
         get: () => Math.round(toH(state.settings[key])),
         set: (v: number | string) => {
@@ -738,9 +740,7 @@ function heightModel(key: 'obstacleMinFt' | 'heightAboveTerrainFt' | 'separation
     });
 }
 const obstacleMin = heightModel('obstacleMinFt');
-const heightOverTerrain = heightModel('heightAboveTerrainFt');
 const separation = heightModel('separationFt');
-const corridor = heightModel('corridorFt');
 const cruise = computed({
     get: () => Math.round(toS(state.settings.cruiseMph)),
     set: (v: number | string) => {
@@ -754,6 +754,8 @@ watch(() => state.settings.units, () => {
     customMi.value = rangeNow();
     customStandoffOn.value = !isStandoffPreset();
     customStandoff.value = standoffNow();
+    customBufferOn.value = !isBufferPreset();
+    customBuffer.value = bufferNow();
     const g = state.plan.givenAltitudeAgl;
     given.value = g !== undefined ? Math.round(toH(g)) : undefined;
 });
@@ -794,7 +796,7 @@ watch(() => state.plan.mode, () => {
 const maxReason = computed(() => {
     const res = r.value;
     if (!res) return '';
-    if (res.raisedBy) return `raised to clear ${res.raisedBy === 'obstacle' ? 'an obstacle' : 'terrain'}`;
+    if (res.raisedBy) return 'raised to clear an obstacle';
     if (res.uasCeilingUsedFt !== undefined && res.uasCeilingUsedFt < PART_107_FT) return `${fmtH(res.uasCeilingUsedFt)} UAS grid`;
     return 'Part 107';
 });
@@ -802,25 +804,6 @@ const maxReason = computed(() => {
 const gridCeilings = computed(() => [...new Set((r.value?.uasCells || []).map((c) => c.ceilingFt))].sort((a, b) => a - b));
 
 // ---- point summaries ----
-
-const homeInfo = ref<PointInfo | undefined>();
-const targetInfo = ref<PointInfo | undefined>();
-
-async function loadInfo(which: 'home' | 'target'): Promise<void> {
-    const p = state.plan[which];
-    const out = which === 'home' ? homeInfo : targetInfo;
-    out.value = undefined;
-    if (!p || !runtime.map) return;
-    try {
-        const info = await pointInfo(runtime.map, p.lon, p.lat);
-        if (state.plan[which] === p) out.value = info;
-    } catch {
-        // The summary simply leaves the numbers out.
-    }
-}
-
-watch(() => state.plan.home, () => { void loadInfo('home'); });
-watch(() => state.plan.target, () => { void loadInfo('target'); });
 
 const targetDistanceFt = computed(() => {
     const h = state.plan.home, t = state.plan.target;
@@ -830,11 +813,6 @@ const targetBearing = computed(() => {
     const h = state.plan.home, t = state.plan.target;
     return h && t ? bearing([h.lon, h.lat], [t.lon, t.lat]) : 0;
 });
-const targetRel = computed(() => {
-    const a = homeInfo.value?.groundFt, b = targetInfo.value?.groundFt;
-    return a !== undefined && b !== undefined ? b - a : undefined;
-});
-
 // ---- drawing and recalculating ----
 
 // The shapes follow every input at once; the readouts follow once the inputs settle.
@@ -853,7 +831,6 @@ watch(() => [
     state.settings.radiusFt,
     state.settings.standoffFt,
     state.settings.corridorFt,
-    state.settings.heightAboveTerrainFt,
     state.settings.separationFt,
     state.settings.cruiseMph,
     state.settings.enduranceMin,
@@ -867,8 +844,6 @@ watch(() => [
 });
 
 onMounted(() => {
-    if (state.plan.home) void loadInfo('home');
-    if (state.plan.target) void loadInfo('target');
     if (planOn.value && !state.plan.result) void compute();
 });
 
@@ -927,10 +902,6 @@ function flyTo(lon: number, lat: number): void {
     runtime.map?.flyTo({ center: [lon, lat], zoom: Math.max(runtime.map.getZoom(), 14) });
 }
 
-function fmtLL(p: { lon: number; lat: number }): string {
-    return `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
-}
-
 function fmtMin(m: number): string {
     if (m < 1) return `${Math.max(1, Math.round(m * 60))} s`;
     return `${m.toFixed(1).replace(/\.0$/, '')} min`;
@@ -952,6 +923,7 @@ function reset(): void {
     Object.assign(state.settings, d);
     customRange.value = !isRangePreset();
     customStandoffOn.value = !isStandoffPreset();
+    customBufferOn.value = !isBufferPreset();
 }
 </script>
 

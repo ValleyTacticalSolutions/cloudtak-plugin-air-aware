@@ -22,11 +22,11 @@ Eight layers, each switched on or off on its own:
 Clicking anything on the map opens its details in a floating pane. A CoT marker drawn on top takes the click instead.
 
 **UAS Flight Planner** tab. It walks you through the plan one step at a time, and everything recalculates as you change it. Every height is in ft above Home, the way the drone's altimeter reads it:
-1. **Home / Takeoff Point**: click the map. Shows ground elevation and the UAS grid ceiling there.
-2. **Target / Area Of Interest**: click the map, or use **Set Home As Target** to work over the takeoff point. Shows distance, bearing and ground difference from Home.
-3. **Mission Profile**: operating range from Home (¼, ½, ¾, 1, 1½ mi or custom) and target standoff (overhead, 250 ft, 500 ft, 1000 ft, ¼ mi or custom). The flight area is a corridor from Home to the standoff point plus a ring around the target. Shows the gimbal angle and slant range to the target from the standoff point at your altitude, the furthest point from Home (warns past your range), transit time and time on station from cruise speed and battery endurance (20% reserve).
-4. **Altitude**: **Recommend** (highest ground in the area plus the height you hold over terrain, rounded up to 10 ft) or **Set My Own**. Capped at the lower of 400 ft and the lowest UAS grid ceiling overlapping the area (a 300 ft and a 200 ft cell means 200 ft), less any drop of the ground below Home. A UAS grid below 400 ft is never exceeded. Where there is no lower grid, terrain or obstacles (tallest top plus your clearance) can raise it above 400 ft, but only as far as clearing them needs. Terrain the altitude cannot clear is shaded red on the map.
-5. **Flight Area Check**: only what overlaps the flight area: UAS grid cells, obstacles (flagged when they reach your altitude plus clearance), TFRs, UAS No-Fly areas, airspace (Class A left out), special use airspace and NOTAMs.
+1. **Home / Takeoff Point**: click the map. The step disappears once Home is set.
+2. **Target / Area Of Interest**: click the map, or use **Set Home As Target** to work over the takeoff point. The step disappears once the target is set; **Clear Plan** starts over.
+3. **Mission**: max distance from operator (¼, ½, ¾, 1, 1½ mi or custom), target standoff distance (overhead, 250 ft, 500 ft, 1000 ft, ¼ mi or custom) and corridor buffer each side of the track (100, 250, 500, 1000 ft or custom). The flight area is the buffered corridor from Home to the standoff point plus a ring around the target. Shows the target's distance and bearing, the gimbal angle and slant range from the standoff point at your altitude, the furthest point from Home (warns past your range), transit time and time on station from cruise speed and battery endurance (20% reserve).
+4. **Altitude**: **Recommend** uses the legal ceiling: the lower of 400 ft and the lowest UAS grid ceiling overlapping the flight area (a 100 ft and a 200 ft cell means 100 ft). **Set My Own** is lowered to that ceiling. A grid below 400 ft is never exceeded; where there is none, a taller obstacle (top plus your clearance) can raise the ceiling above 400 ft, only as far as it needs. Terrain does not change the altitude.
+5. **Flight Area Check**: UAS grid cells are drawn across the whole range; everything else only where it overlaps the flight area: UAS grid cells, obstacles (flagged when they reach your altitude plus clearance), TFRs, UAS No-Fly areas, airspace (Class A left out), special use airspace and NOTAMs.
 
 Home is drawn as an ICS helispot (H in a circle) and the target as a hostile diamond. **Clear Plan** is at the bottom of the planner and in the Air Aware header while a plan is up.
 
@@ -41,13 +41,13 @@ Settings (layers, obstacle filters, planner numbers) are stored per browser.
 1. Open the CloudTAK main menu and choose **Air Aware**.
 2. In **Layers**, switch on what you need. Each layer's status line says what it is showing and what it is *not* showing (for example, zoom gates or unreachable sources). A quiet map is not an empty sky.
 3. Click a feature to read its details.
-4. The planner reads ground elevation from CloudTAK's terrain, with 3D terrain on or off. It tries the terrain (raster-dem) overlay on the map first, then the server's **Default Terrain** (Admin → Config → Map, for example as set by the Terrain Data Downloader plugin), then MapLibre's 3D terrain. The readout names which one it used. Where none of these has data, it says so and computes nothing.
+4. The planner reads ground elevation from CloudTAK's terrain (for obstacle tops relative to Home, the gimbal angle and the terrain readout), with 3D terrain on or off. It tries the terrain (raster-dem) overlay on the map first, then the server's **Default Terrain** (Admin → Config → Map, for example as set by the Terrain Data Downloader plugin), then MapLibre's 3D terrain. Where none of these has data, it says so.
 
 ### Differences from the ATAK plugin
 
 - No offline tile store. CloudTAK's API server caches the data in memory instead (manifests for hours, NOTAMs for 3 minutes, TFRs for 5 minutes, METARs for 5 minutes).
 - The planner uses a Home-to-target corridor and target ring and works in ft above Home. Drawn-polygon plan areas, "make a geofence from a restriction", and the LAANC / DroneZone / Flight Service links are not included.
-- Terrain comes from CloudTAK's terrain (DEM overlay or the server's Default Terrain), not ATAK's elevation data. The default height above terrain is 400 ft.
+- Terrain comes from CloudTAK's terrain (DEM overlay or the server's Default Terrain), not ATAK's elevation data.
 - 3D volumes start at the map's ground plane and are not corrected for terrain. Read the published numbers on the details page.
 
 ## TAK Portal Marketplace
@@ -63,7 +63,7 @@ Settings (layers, obstacle filters, planner numbers) are stored per browser.
    No action is needed if the server already has normal internet egress.
 3. After install: **Settings → Refresh App** in CloudTAK (a normal browser refresh is not enough).
 
-For the planner's ground readouts, CloudTAK needs terrain data: either a **Default Terrain** set under Admin → Config → Map (for example by the Terrain Data Downloader plugin), or a terrain overlay that users add themselves. Without one, the planner says there is no terrain and computes nothing.
+For the planner's ground readouts, CloudTAK needs terrain data: either a **Default Terrain** set under Admin → Config → Map (for example by the Terrain Data Downloader plugin), or a terrain overlay that users add themselves. Without one, the planner still sets the altitude from the grid but cannot place obstacle tops relative to Home.
 
 ### Catalog entry
 ```json

@@ -14,8 +14,6 @@ export interface Settings {
     volumes: boolean;
     /** Hide TFRs that are scheduled but not yet in effect. */
     activeTfrOnly: boolean;
-    /** Planner: height the aircraft flies above the terrain, ft. */
-    heightAboveTerrainFt: number;
     /** Planner: required vertical separation from obstacles, ft. */
     separationFt: number;
     /** Planner: operating range, max distance from Home, ft. */
@@ -47,7 +45,6 @@ export const DEFAULT_SETTINGS: Settings = {
     obstacleTypes: [],
     volumes: false,
     activeTfrOnly: false,
-    heightAboveTerrainFt: 400,
     separationFt: 100,
     radiusFt: 2640,
     standoffFt: 500,
@@ -144,24 +141,20 @@ export interface PlanResult {
     transitMin?: number;
     onStationMin?: number;
 
-    /** Lowest ground clearance altitude: highest ground + height over terrain, rounded up to 10 ft. */
-    floorAgl?: number;
     /** Altitude needed to clear the highest obstacle top plus separation, ft above Home. */
     obstacleNeedAgl?: number;
-    /** Highest legal altimeter reading: min(400, lowest grid) adjusted for ground below Home. */
+    /** Legal ceiling: the lower of 400 ft and the lowest grid over the flight area. */
     maxAltitudeAgl?: number;
-    /** The most the plan may use: the legal maximum, or higher only as far as terrain or obstacles need. */
+    /** The most the plan may use: the legal ceiling, or higher only as far as an obstacle needs (no grid below 400 ft). */
     allowedMaxAgl?: number;
     /** What took the plan above the legal maximum, if anything. */
-    raisedBy?: 'terrain' | 'obstacle';
+    raisedBy?: 'obstacle';
     /** The ceiling rule that set maxAltitudeAgl (400 ft or a grid value). */
     capFt: number;
     /** The altitude the plan uses, ft above Home. */
     altitudeAgl?: number;
     /** A Set My Own value was lowered to the legal maximum. */
     clamped?: boolean;
-    /** Share of the area where the altitude cannot hold the height over terrain. */
-    tooHighPct?: number;
 
     /** UAS Facility Map cells overlapping the area, lowest first. */
     uasCells: PlanUasCell[];

@@ -1,5 +1,6 @@
 import { reactive, watch } from 'vue';
 import type { LayerKey } from './constants.ts';
+import type { Units } from './units.ts';
 
 const STORAGE_KEY = 'air-aware-settings-v2';
 
@@ -27,6 +28,8 @@ export interface Settings {
     cruiseMph: number;
     /** Planner: flight endurance per battery, minutes. */
     enduranceMin: number;
+    /** Display units. */
+    units: Units;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -50,7 +53,8 @@ export const DEFAULT_SETTINGS: Settings = {
     standoffFt: 500,
     corridorFt: 250,
     cruiseMph: 25,
-    enduranceMin: 25
+    enduranceMin: 25,
+    units: 'imperial'
 };
 
 function load(): Settings {
@@ -134,6 +138,8 @@ export interface PlanResult {
     maxReachFt: number;
     /** Line of sight from the standoff point at altitude to the target, ft. */
     slantRangeFt?: number;
+    /** Camera angle below level to see the target from the standoff point, degrees. */
+    gimbalDeg?: number;
     /** One-way transit, minutes, and time on station after a 20% reserve. */
     transitMin?: number;
     onStationMin?: number;

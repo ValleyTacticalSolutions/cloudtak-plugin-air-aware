@@ -19,16 +19,20 @@ Eight layers, each switched on or off on its own:
 | **Obstacles** | Digital Obstacle File towers, wires, turbines and stacks, labelled with height AGL and top MSL. You can filter by height and type. Zoom 9+. | FAA DOF, takwerx pack |
 | **METARs** | Flight-category dots: VFR green, MVFR blue, IFR red, LIFR magenta, as published (never derived). Zoom 6+. | aviationweather.gov |
 
-Tapping anything on the map opens its details in a floating pane.
+Clicking anything on the map opens its details in a floating pane. A CoT marker drawn on top takes the click instead.
 
 **UAS Flight Planner** tab. It walks you through the plan one step at a time, and everything recalculates as you change it. Every height is in ft above Home, the way the drone's altimeter reads it:
-1. **Home / Takeoff Point**: tap the map or use the map center. Shows ground elevation and the UAS grid ceiling there.
-2. **Target / Area Of Interest**: tap the map or use the map center. Shows distance, bearing and ground difference from Home.
-3. **Mission Profile**: operating range from Home (¼, ½, ¾, 1, 1½ mi or custom) and target standoff (overhead, 250 ft, 500 ft, 1000 ft, ¼ mi or custom). The flight area is a corridor from Home to the standoff point plus a ring around the target. Shows the furthest point from Home (warns past your range), slant range to the target, transit time and time on station from cruise speed and battery endurance (20% reserve).
-4. **Altitude**: **Recommend** (highest ground in the area plus the height you hold over terrain, rounded up to 10 ft) or **Set My Own**. Capped at the lower of 400 ft and the lowest UAS grid ceiling overlapping the area (a 300 ft and a 200 ft cell means 200 ft), less any drop of the ground below Home. Terrain or obstacles (tallest top plus your clearance) can raise it above that cap, but only as far as clearing them needs. Terrain the altitude cannot clear is shaded red on the map.
-5. **Flight Area Check**: only what overlaps the flight area: UAS grid cells, obstacles (flagged when they reach your altitude plus clearance), TFRs, UAS No-Fly areas, airspace, special use airspace and NOTAMs.
+1. **Home / Takeoff Point**: click the map. Shows ground elevation and the UAS grid ceiling there.
+2. **Target / Area Of Interest**: click the map, or use **Set Home As Target** to work over the takeoff point. Shows distance, bearing and ground difference from Home.
+3. **Mission Profile**: operating range from Home (¼, ½, ¾, 1, 1½ mi or custom) and target standoff (overhead, 250 ft, 500 ft, 1000 ft, ¼ mi or custom). The flight area is a corridor from Home to the standoff point plus a ring around the target. Shows the gimbal angle and slant range to the target from the standoff point at your altitude, the furthest point from Home (warns past your range), transit time and time on station from cruise speed and battery endurance (20% reserve).
+4. **Altitude**: **Recommend** (highest ground in the area plus the height you hold over terrain, rounded up to 10 ft) or **Set My Own**. Capped at the lower of 400 ft and the lowest UAS grid ceiling overlapping the area (a 300 ft and a 200 ft cell means 200 ft), less any drop of the ground below Home. A UAS grid below 400 ft is never exceeded. Where there is no lower grid, terrain or obstacles (tallest top plus your clearance) can raise it above 400 ft, but only as far as clearing them needs. Terrain the altitude cannot clear is shaded red on the map.
+5. **Flight Area Check**: only what overlaps the flight area: UAS grid cells, obstacles (flagged when they reach your altitude plus clearance), TFRs, UAS No-Fly areas, airspace (Class A left out), special use airspace and NOTAMs.
+
+Home is drawn as an ICS helispot (H in a circle) and the target as a hostile diamond. **Clear Plan** is at the bottom of the planner and in the Air Aware header while a plan is up.
 
 While a plan is up, the map shows only the hazards that overlap the flight area, whatever the Layers switches say. Clear the plan to browse the layers again.
+
+Distances in miles also show feet (for example 0.62 mi / 3,274 ft). **Settings → Units** switches the panel between Imperial (default) and Metric (km / m, m, km/h). Published records in the details pane (TFR and airspace limits, obstacle heights) stay in the feet they were published in.
 
 Settings (layers, obstacle filters, planner numbers) are stored per browser.
 
@@ -36,7 +40,7 @@ Settings (layers, obstacle filters, planner numbers) are stored per browser.
 
 1. Open the CloudTAK main menu and choose **Air Aware**.
 2. In **Layers**, switch on what you need. Each layer's status line says what it is showing and what it is *not* showing (for example, zoom gates or unreachable sources). A quiet map is not an empty sky.
-3. Tap a feature to read its details.
+3. Click a feature to read its details.
 4. The planner reads ground elevation from CloudTAK's terrain, with 3D terrain on or off. It tries the terrain (raster-dem) overlay on the map first, then the server's **Default Terrain** (Admin → Config → Map, for example as set by the Terrain Data Downloader plugin), then MapLibre's 3D terrain. The readout names which one it used. Where none of these has data, it says so and computes nothing.
 
 ### Differences from the ATAK plugin

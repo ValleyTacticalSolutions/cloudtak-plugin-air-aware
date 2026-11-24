@@ -4,7 +4,7 @@
             v-if='!state.details.length'
             class='text-secondary small p-2'
         >
-            Tap a TFR, airspace shelf, grid cell, obstacle, NOTAM or METAR on the map to read it here.
+            Click a TFR, airspace shelf, grid cell, obstacle, NOTAM or METAR on the map to read it here.
         </div>
         <div
             v-for='(d, i) in state.details'

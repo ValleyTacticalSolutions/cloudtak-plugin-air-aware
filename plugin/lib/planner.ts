@@ -7,7 +7,9 @@ import {
     bearing, circle, corridor, destination, distanceM, inArea, makeArea, overlapsArea,
     FT_PER_M, M_PER_FT, type Area
 } from './geo.ts';
-import { airportName, obstacleDetail, type AirAwareLayers, type ObstacleRow, type PlanHazardKind } from './layers.ts';
+import { airportName, obstacleDetail, ICON_HOME, ICON_TARGET, type AirAwareLayers, type ObstacleRow, type PlanHazardKind } from './layers.ts';
+import { runtime } from './runtime.ts';
+import { fmtDist, fmtH } from './units.ts';
 import { state, type Detail, type PlanObstacle, type PlanResult, type PlanUasCell } from './store.ts';
 
 type LL = [number, number];
@@ -68,11 +70,11 @@ export function planShape(): FeatureCollection {
         if (g.standoffM > 0) {
             features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: g.standoff }, properties: { color: COLORS.plan, radius: 5, label: 'Standoff' } });
         }
-        features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: g.target }, properties: { color: COLORS.target, label: 'Target' } });
+        features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: g.target }, properties: { icon: ICON_TARGET, label: 'Target' } });
     } else if (p.target) {
-        features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [p.target.lon, p.target.lat] }, properties: { color: COLORS.target, label: 'Target' } });
+        features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [p.target.lon, p.target.lat] }, properties: { icon: ICON_TARGET, label: 'Target' } });
     }
-    features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: home }, properties: { color: COLORS.plan, label: 'Home' } });
+    features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: home }, properties: { icon: ICON_HOME, label: 'Home' } });
     return { type: 'FeatureCollection', features };
 }
 
@@ -198,7 +200,7 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
     }
     const maxReachFt = maxReachM * FT_PER_M;
     if (maxReachFt > s.radiusFt) {
-        warnings.push(`The flight area reaches ${fmtMi(maxReachFt)} from Home, past your ${fmtMi(s.radiusFt)} operating range.`);
+        warnings.push(`The flight area reaches ${fmtDist(maxReachFt)} from Home, past your ${fmtDist(s.radiusFt)} operating range.`);
     }
 
     // ---- UAS Facility Map across the area ----
@@ -252,20 +254,22 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
     const capFt = Math.max(0, Math.min(PART_107_FT, lowestGrid ?? PART_107_FT));
     const maxAltitudeAgl = Math.max(0, Math.floor((capFt + (drop ?? 0)) / 10) * 10);
     const floorAgl = rise !== undefined ? Math.ceil((rise + s.heightAboveTerrainFt) / 10) * 10 : undefined;
-    // Clearing terrain and obstacles may take the plan above that ceiling, and only that far.
+    // Without a grid below 400 ft, clearing terrain and obstacles may take the plan above 400 ft,
+    // and only that far. A published grid ceiling is never exceeded.
+    const gridBinds = lowestGrid !== undefined && lowestGrid < PART_107_FT;
     const needs = [floorAgl, obstacleNeedAgl].filter((n): n is number => n !== undefined);
     const needAgl = needs.length ? Math.max(...needs) : undefined;
-    const allowedMaxAgl = Math.max(maxAltitudeAgl, needAgl ?? 0);
-    const raisedBy = needAgl !== undefined && needAgl > maxAltitudeAgl
+    const allowedMaxAgl = gridBinds ? maxAltitudeAgl : Math.max(maxAltitudeAgl, needAgl ?? 0);
+    const raisedBy = !gridBinds && needAgl !== undefined && needAgl > maxAltitudeAgl
         ? (obstacleNeedAgl !== undefined && obstacleNeedAgl === needAgl ? 'obstacle' : 'terrain')
         : undefined;
 
     let altitudeAgl: number | undefined;
     let clamped = false;
     if (lowestGrid !== undefined && lowestGrid <= 0) {
-        warnings.unshift('A UAS Facility Map grid of 0 ft overlaps the flight area: any flight there needs an FAA authorization.');
+        warnings.unshift('A UAS Facility Map grid of 0 overlaps the flight area: any flight there needs an FAA authorization.');
     } else if (p.mode === 'need') {
-        altitudeAgl = needAgl ?? maxAltitudeAgl;
+        altitudeAgl = Math.min(needAgl ?? maxAltitudeAgl, allowedMaxAgl);
     } else if (p.givenAltitudeAgl) {
         altitudeAgl = p.givenAltitudeAgl;
         if (altitudeAgl > allowedMaxAgl) {
@@ -273,7 +277,11 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
             clamped = true;
         }
     } else {
-        warnings.push('Enter your altitude (ft above Home).');
+        warnings.push('Enter your altitude above Home.');
+    }
+
+    if (altitudeAgl !== undefined && needAgl !== undefined && needAgl > allowedMaxAgl) {
+        warnings.unshift(`Clearing terrain and obstacles needs ${fmtH(needAgl)}; the ${fmtH(lowestGrid)} grid caps you at ${fmtH(allowedMaxAgl)}.`);
     }
 
     // ---- terrain the altitude cannot clear ----
@@ -321,8 +329,10 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
         }
         const names = new Set<string>();
         for (const f of list) {
-            if (!overlapsArea(f, g.area)) continue;
             const pr = f.properties || {};
+            // Class A starts at 18,000 ft MSL: never a drone's concern.
+            if (kind === 'airspace' && pr.cls === 'A') continue;
+            if (!overlapsArea(f, g.area)) continue;
             const label = String(pr.label || '').split('\n')[0];
             const name = String(pr.name || '');
             names.add(kind === 'airspace' ? (name ? `${name} (${label})` : label)
@@ -337,10 +347,13 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
 
     // ---- mission timing ----
     let slantRangeFt: number | undefined;
+    let gimbalDeg: number | undefined;
     if (altitudeAgl !== undefined) {
         const tRel = targetGround !== null && homeGround !== null ? targetGround - homeGround : 0;
         const standoffFt = g.standoffM * FT_PER_M;
         slantRangeFt = Math.sqrt(standoffFt ** 2 + (altitudeAgl - tRel) ** 2);
+        // Camera depression from level to the target: 90 straight down when overhead.
+        gimbalDeg = Math.round(Math.atan2(altitudeAgl - tRel, standoffFt) * 180 / Math.PI);
     }
     let transitMin: number | undefined;
     let onStationMin: number | undefined;
@@ -366,6 +379,7 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
         standoffDistanceFt,
         maxReachFt,
         slantRangeFt,
+        gimbalDeg,
         transitMin,
         onStationMin,
         floorAgl,
@@ -397,6 +411,15 @@ export async function computePlan(map: MLMap, layers: AirAwareLayers): Promise<P
     };
 }
 
-function fmtMi(ft: number): string {
-    return `${(ft / 5280).toFixed(2).replace(/\.?0+$/, '')} mi`;
+/** Remove the plan: points, result and everything it drew. */
+export function clearPlan(): void {
+    state.plan.home = undefined;
+    state.plan.target = undefined;
+    state.plan.picking = false;
+    state.plan.result = undefined;
+    state.plan.computing = false;
+    if (runtime.map) runtime.map.getCanvas().style.cursor = '';
+    runtime.layers?.setPlanHazards({ type: 'FeatureCollection', features: [] });
+    runtime.layers?.setIslands({ type: 'FeatureCollection', features: [] });
+    runtime.layers?.setPlan(planShape());
 }

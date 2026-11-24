@@ -209,23 +209,6 @@ export function esriRings(rings: number[][][]): Polygon | { type: 'MultiPolygon'
     return { type: 'MultiPolygon', coordinates: polys };
 }
 
-export function fmtFt(ft: number | undefined): string {
-    if (ft === undefined || !isFinite(ft)) return '—';
-    return Math.round(ft).toLocaleString('en-US') + ' ft';
-}
-
-export function fmtDist(ft: number): string {
-    if (ft < 1000) return Math.round(ft).toLocaleString('en-US') + ' ft';
-    return (ft / 5280).toFixed(2).replace(/\.?0+$/, '') + ' mi';
-}
-
-/** Signed height relative to takeoff, e.g. "+120 ft" / "-40 ft". */
-export function fmtRel(ft: number | undefined): string {
-    if (ft === undefined || !isFinite(ft)) return '—';
-    const r = Math.round(ft);
-    return (r > 0 ? '+' : '') + r.toLocaleString('en-US') + ' ft';
-}
-
 export function fmtTime(iso: string | number | undefined): string {
     if (iso === undefined || iso === '' || iso === 0) return '—';
     const d = new Date(iso);

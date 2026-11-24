@@ -14,6 +14,7 @@ import { keysFor, loadMetars, loadTfrs, manifest, packFile, tile, type Manifest,
 import { circle, emptyCollection, esriRings, fmtTime, M_PER_FT } from './geo.ts';
 import { tfrActive, vertText, type Tfr } from './tfr.ts';
 import { planShape } from './planner.ts';
+import { fmtH } from './units.ts';
 
 const SRC = (k: string): string => `${PREFIX}-${k}`;
 const LYR = (k: string, part: string): string => `${PREFIX}-${k}-${part}`;
@@ -133,6 +134,7 @@ export class AirAwareLayers {
             state.settings.obstacleMinFt,
             state.settings.obstacleTypes.join(','),
             state.settings.activeTfrOnly,
+            state.settings.units,
             state.revision
         ], () => this.schedule(0)));
         this.stops.push(watch(() => state.settings.volumes, () => this.applyVisibility()));
@@ -180,6 +182,7 @@ export class AirAwareLayers {
             return;
         }
         if (!style) return;
+        this.ensureIcons();
         if (this.map.getSource(SRC('plan')) && this.map.getLayer(LYR('plan', 'line'))) return;
         this.removeAll();
         for (const s of SOURCES) {
@@ -300,12 +303,41 @@ export class AirAwareLayers {
                 filter: ['to-boolean', ['get', 'ring']],
                 paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-dasharray': [3, 2] }
             },
-            label('plan', 8, 12, { 'text-offset': [0, 1.3], 'text-anchor': 'top' }),
             {
-                id: LYR('plan', 'point'), type: 'circle', source: SRC('plan'), filter: points,
+                id: LYR('plan', 'point'), type: 'circle', source: SRC('plan'),
+                filter: ['all', points, ['!', ['has', 'icon']]],
                 paint: { 'circle-color': ['get', 'color'], 'circle-radius': ['coalesce', ['get', 'radius'], 8], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 }
-            }
+            },
+            {
+                id: LYR('plan', 'icon'), type: 'symbol', source: SRC('plan'),
+                filter: ['all', points, ['has', 'icon']],
+                layout: {
+                    'icon-image': ['get', 'icon'],
+                    'icon-allow-overlap': true,
+                    'icon-ignore-placement': true,
+                    'text-field': ['get', 'label'],
+                    'text-font': FONT,
+                    'text-size': 12,
+                    'text-offset': [0, 1.6],
+                    'text-anchor': 'top',
+                    'text-optional': true
+                },
+                paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,0.85)', 'text-halo-width': 1.5 }
+            } as LayerSpecification,
+            {
+                ...label('plan', 8, 12, { 'text-offset': [0, 1.0], 'text-anchor': 'top' }),
+                filter: ['!', ['has', 'icon']]
+            } as LayerSpecification
         ];
+    }
+
+    /** Home and target symbols, redrawn after a basemap change drops them. */
+    private ensureIcons(): void {
+        for (const [name, draw] of Object.entries(ICONS)) {
+            if (this.map.hasImage(name)) continue;
+            const img = draw();
+            if (img) this.map.addImage(name, img, { pixelRatio: 2 });
+        }
     }
 
     applyVisibility(): void {
@@ -347,7 +379,7 @@ export class AirAwareLayers {
         this.setData('plan', fc);
     }
 
-    /** Overlapping hazards for the plan, with the details their taps open. */
+    /** Overlapping hazards for the plan, with the details their clicks open. */
     setPlanHazards(fc: FeatureCollection, bag?: Map<string, Detail>): void {
         this.setData('planhaz', fc);
         if (bag) this.details.set('planhaz', bag);
@@ -616,7 +648,8 @@ export class AirAwareLayers {
                         label: sua ? `${name}\n${lower.short}–${upper.short}` : `${cls} ${upper.short}/${lower.short}`,
                         baseM: lower.ft * M_PER_FT,
                         topM: upper.ft * M_PER_FT,
-                        name: name || local
+                        name: name || local,
+                        cls
                     }
                 });
             }
@@ -668,8 +701,8 @@ export class AirAwareLayers {
             state.here = 'Zoom in to read the UAS ceiling at the map center';
         } else if (cell) {
             state.here = cell.ceiling <= 0
-                ? `Map Center: UAS ceiling 0 ft — authorization required to fly at all (${cell.airport})`
-                : `Map Center: UAS ceiling ${cell.ceiling} ft AGL without further authorization (${cell.airport})`;
+                ? `Map Center: UAS ceiling 0 — authorization required to fly at all (${cell.airport})`
+                : `Map Center: UAS ceiling ${fmtH(cell.ceiling)} AGL without further authorization (${cell.airport})`;
         } else {
             state.here = 'Map Center: not on the UAS Facility Map — no LAANC grid here (check airspace class)';
         }
@@ -732,7 +765,7 @@ export class AirAwareLayers {
             }
         }
         if (this.obstacles.size > 300_000) this.obstacles.clear();
-        let text = `${features.length.toLocaleString('en-US')} obstacles ${min}+ ft in view`;
+        let text = `${features.length.toLocaleString('en-US')} obstacles ${fmtH(min)}+ in view`;
         if (hidden) text += ` · ${hidden.toLocaleString('en-US')} shorter or filtered`;
         if (features.length >= 20_000) text += ' · list trimmed, zoom in';
         return { fc: { type: 'FeatureCollection', features }, text };
@@ -771,6 +804,15 @@ export class AirAwareLayers {
         }
         const layers = CLICKABLE.filter((id) => this.map.getLayer(id) && this.map.getLayoutProperty(id, 'visibility') !== 'none');
         if (!layers.length) return;
+        // Top-most first: a CoT marker drawn over the air picture owns the click.
+        try {
+            for (const f of this.map.queryRenderedFeatures(e.point)) {
+                if (isCotPoint(f)) return;
+                if (String(f.layer?.id || '').startsWith(`${PREFIX}-`)) break;
+            }
+        } catch {
+            // Style mid-change: fall through to our own layers.
+        }
         const hits = this.map.queryRenderedFeatures(e.point, { layers });
         const out: Detail[] = [];
         const seen = new Set<string>();
@@ -808,6 +850,67 @@ export class AirAwareLayers {
 }
 
 // ---- helpers ----
+
+export const ICON_HOME = `${PREFIX}-helispot`;
+export const ICON_TARGET = `${PREFIX}-hostile`;
+
+function canvas(size: number): { ctx: CanvasRenderingContext2D; done: () => ImageData } | null {
+    const c = document.createElement('canvas');
+    c.width = c.height = size;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    return { ctx, done: () => ctx.getImageData(0, 0, size, size) };
+}
+
+const ICONS: Record<string, () => ImageData | null> = {
+    // ICS helispot: a bold H in a circle.
+    [ICON_HOME]: () => {
+        const k = canvas(64);
+        if (!k) return null;
+        const { ctx } = k;
+        ctx.beginPath();
+        ctx.arc(32, 32, 27, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#000000';
+        ctx.stroke();
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(20, 17, 7, 30);
+        ctx.fillRect(37, 17, 7, 30);
+        ctx.fillRect(20, 29, 24, 6);
+        return k.done();
+    },
+    // MIL-STD-2525 hostile frame: a red diamond.
+    [ICON_TARGET]: () => {
+        const k = canvas(64);
+        if (!k) return null;
+        const { ctx } = k;
+        ctx.beginPath();
+        ctx.moveTo(32, 4);
+        ctx.lineTo(60, 32);
+        ctx.lineTo(32, 60);
+        ctx.lineTo(4, 32);
+        ctx.closePath();
+        ctx.fillStyle = '#ff8080';
+        ctx.fill();
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#000000';
+        ctx.stroke();
+        return k.done();
+    }
+};
+
+/** CloudTAK point CoTs: `{overlayId}`, `{overlayId}-icon|-course|-group|-text-point`. */
+const COT_POINT_LAYER = /^-?\d+(?:-icon|-course|-group|-text-point)?$/;
+
+function isCotPoint(f: { layer?: { id?: string; type?: string }; geometry?: { type?: string } | null }): boolean {
+    const id = f.layer?.id ?? '';
+    if (!COT_POINT_LAYER.test(id)) return false;
+    if (/(?:-icon|-course|-group|-text-point)$/.test(id)) return true;
+    // A bare overlay id is also used for raster layers. Only a point marker counts.
+    return f.geometry?.type === 'Point' && (f.layer?.type === 'circle' || f.layer?.type === 'symbol');
+}
 
 /** A flight plan is up once both Home and the target are set. */
 export function planActive(): boolean {

@@ -5,6 +5,7 @@ import { IconDrone } from '@tabler/icons-vue';
 import MenuTemplate from '../../src/components/CloudTAK/util/MenuTemplate.vue';
 import AirAwarePanel from './lib/AirAwarePanel.vue';
 import DetailsView from './lib/DetailsView.vue';
+import HeaderButtons from './lib/HeaderButtons.vue';
 import { AirAwareLayers } from './lib/layers.ts';
 import { runtime } from './lib/runtime.ts';
 import { persistSettings, state } from './lib/store.ts';
@@ -24,6 +25,7 @@ export default class AirAware implements PluginInstance {
             name: ROUTE_NAME,
             component: {
                 render: () => h(MenuTemplate, { name: 'Air Aware', back: false }, {
+                    buttons: () => h(HeaderButtons),
                     default: () => h(AirAwarePanel)
                 })
             }
@@ -71,7 +73,7 @@ export default class AirAware implements PluginInstance {
         state.details = [];
     }
 
-    /** A tap on the map opens its details in a floating pane. */
+    /** A click on the map opens its details in a floating pane. */
     private showDetails(): void {
         if (this.api.float.has(FLOAT_UID)) return;
         this.api.float.add({

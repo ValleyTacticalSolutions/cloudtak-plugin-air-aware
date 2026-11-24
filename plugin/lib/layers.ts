@@ -797,9 +797,14 @@ export class AirAwareLayers {
     private click(e: MapMouseEvent): void {
         const pick = state.plan.picking;
         if (pick) {
-            state.plan.picking = false;
             state.plan[pick] = { lon: e.lngLat.lng, lat: e.lngLat.lat };
-            this.map.getCanvas().style.cursor = '';
+            // Guided flow: after Home, go straight on to the target unless one is already set.
+            if (pick === 'home' && !state.plan.target) {
+                state.plan.picking = 'target';
+            } else {
+                state.plan.picking = false;
+                this.map.getCanvas().style.cursor = '';
+            }
             return;
         }
         const layers = CLICKABLE.filter((id) => this.map.getLayer(id) && this.map.getLayoutProperty(id, 'visibility') !== 'none');

@@ -91,41 +91,69 @@
             v-else-if='tab === "plan"'
             class='d-flex flex-column gap-3 px-2'
         >
-            <!-- Home -->
-            <section v-if='!state.plan.home'>
+            <!-- Start -->
+            <section v-if='!state.plan.home && !state.plan.picking'>
+                <TablerButton
+                    class='btn-success aa-action w-100'
+                    title='Start a guided flight plan'
+                    @click='startPlan'
+                >
+                    <IconPlayerPlay
+                        :size='20'
+                        stroke='1'
+                        class='me-2'
+                    />
+                    Start Flight Planning
+                </TablerButton>
+            </section>
+
+            <!-- Step 1: Home -->
+            <section v-if='state.plan.picking === "home"'>
                 <div class='aa-step'>
                     <IconHome
                         :size='18'
                         stroke='1.5'
                     />
-                    Home / Takeoff Point
+                    Step 1 of 2 · Home / Takeoff Point
                 </div>
-                <TablerButton
-                    class='aa-action w-100'
-                    :class='pickClass("home")'
-                    title='Click the map to place Home'
-                    @click='pick("home")'
-                >
+                <div class='alert alert-warning d-flex align-items-center gap-2 mb-2 py-2'>
                     <IconPointer
                         :size='20'
-                        stroke='1'
-                        class='me-2'
+                        stroke='1.5'
                     />
-                    {{ state.plan.picking === 'home' ? 'Click The Map…' : 'Click Map To Set Home' }}
+                    Click the map to set Home (takeoff point).
+                </div>
+                <TablerButton
+                    class='btn-outline-secondary aa-action w-100'
+                    title='Stop placing points'
+                    @click='cancelPick'
+                >
+                    Cancel
                 </TablerButton>
             </section>
 
-            <!-- Target -->
+            <!-- Step 2: Target -->
             <section v-if='state.plan.home && !state.plan.target'>
                 <div class='aa-step'>
                     <IconTarget
                         :size='18'
                         stroke='1.5'
                     />
-                    Target / Area Of Interest
+                    Step 2 of 2 · Target / Area Of Interest
+                </div>
+                <div
+                    v-if='state.plan.picking === "target"'
+                    class='alert alert-warning d-flex align-items-center gap-2 mb-2 py-2'
+                >
+                    <IconPointer
+                        :size='20'
+                        stroke='1.5'
+                    />
+                    Click the map to set the target, or use Home as the target.
                 </div>
                 <div class='d-flex flex-column gap-2'>
                     <TablerButton
+                        v-if='state.plan.picking !== "target"'
                         class='aa-action w-100'
                         :class='pickClass("target")'
                         title='Click the map to place the target'
@@ -136,7 +164,7 @@
                             stroke='1'
                             class='me-2'
                         />
-                        {{ state.plan.picking === 'target' ? 'Click The Map…' : 'Click Map To Set Target' }}
+                        Click Map To Set Target
                     </TablerButton>
                     <TablerButton
                         class='btn-outline-secondary aa-action w-100'
@@ -601,6 +629,7 @@ import {
     IconHome,
     IconListCheck,
     IconMountain,
+    IconPlayerPlay,
     IconPointer,
     IconRefresh,
     IconRoute,
@@ -610,7 +639,7 @@ import {
 import { LAYERS } from './constants.ts';
 import { state, DEFAULT_SETTINGS, type Pick } from './store.ts';
 import { runtime } from './runtime.ts';
-import { clearPlan, computePlan, planShape, PART_107_FT } from './planner.ts';
+import { clearPlan, computePlan, planShape, startPlan, PART_107_FT } from './planner.ts';
 import { bearing, compass, distanceM, FT_PER_M } from './geo.ts';
 import { dUnit, fmtDist, fmtH, fmtRel, fromD, fromH, fromS, hUnit, metric, sUnit, toD, toH, toS } from './units.ts';
 import { planActive } from './layers.ts';
@@ -789,6 +818,11 @@ watch(tab, () => {
     confirmReset.value = false;
 });
 
+// Restart from the header: show the planner so its prompts are visible.
+watch(() => state.plan.picking, (p) => {
+    if (p) tab.value = 'plan';
+});
+
 watch(() => state.plan.mode, () => {
     clampNote.value = false;
 });
@@ -883,6 +917,11 @@ function pickClass(which: 'home' | 'target'): string {
 function pick(which: Exclude<Pick, false>): void {
     state.plan.picking = state.plan.picking === which ? false : which;
     if (runtime.map) runtime.map.getCanvas().style.cursor = state.plan.picking ? 'crosshair' : '';
+}
+
+function cancelPick(): void {
+    state.plan.picking = false;
+    if (runtime.map) runtime.map.getCanvas().style.cursor = '';
 }
 
 /** Work over the takeoff point itself: the target sits on Home. */

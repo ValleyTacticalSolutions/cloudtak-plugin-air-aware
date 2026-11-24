@@ -372,3 +372,10 @@ export function clearPlan(): void {
     runtime.layers?.setIslands({ type: 'FeatureCollection', features: [] });
     runtime.layers?.setPlan(planShape());
 }
+
+/** Start (or restart) guided planning: clear everything, then wait for a Home click. */
+export function startPlan(): void {
+    clearPlan();
+    state.plan.picking = 'home';
+    if (runtime.map) runtime.map.getCanvas().style.cursor = 'crosshair';
+}

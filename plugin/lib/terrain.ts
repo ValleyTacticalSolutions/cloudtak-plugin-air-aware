@@ -76,8 +76,12 @@ function serverDefault(): Promise<DemSource | null> {
             if (!id || id < 1) return null;
             const token = await getRuntimeToken();
             const q = token ? `?token=${encodeURIComponent(token)}` : '';
-            const tj = await std(`/api/basemap/${id}/tiles${q}`) as TileJSONish;
-            const tiles = Array.isArray(tj.tiles) && tj.tiles.length ? tj.tiles : [`/api/basemap/${id}/tiles/{z}/{x}/{y}`];
+            // CloudTAK v14 serves basemap tiles from the PMTiles tile server
+            const tileCfg = await std('/api/config/tiles') as { url?: string };
+            if (!tileCfg.url) return null;
+            const base = tileCfg.url.replace(/\/$/, '');
+            const tj = await std(`${base}/tiles/basemap/${id}/tiles${q}`) as TileJSONish;
+            const tiles = Array.isArray(tj.tiles) && tj.tiles.length ? tj.tiles : [`${base}/tiles/basemap/${id}/tiles/{z}/{x}/{y}${q}`];
             return {
                 label: `default terrain basemap ${id}`,
                 tiles,

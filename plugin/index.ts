@@ -71,14 +71,12 @@ export default class AirAware implements PluginInstance {
         state.details = [];
     }
 
-    /** A tap on the map opens the details: in the sidebar when it is open, else a floating pane. */
+    /** A tap on the map opens its details in a floating pane. */
     private showDetails(): void {
-        const current = this.api.router.currentRoute.value;
-        if (current && current.name === ROUTE_NAME) return;
         if (this.api.float.has(FLOAT_UID)) return;
         this.api.float.add({
             uid: FLOAT_UID,
-            name: 'Air Aware',
+            name: 'Air Aware Details',
             component: markRaw(DetailsView),
             width: 360,
             height: 420

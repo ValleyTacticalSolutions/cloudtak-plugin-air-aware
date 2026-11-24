@@ -13,7 +13,7 @@ export const LAYERS: Array<{ key: LayerKey; label: string; description: string; 
     { key: 'notams', label: 'NOTAMs', description: 'Drone ops, parachute drops, unlit towers, cranes, closed runways', minZoom: 7 },
     { key: 'airspace', label: 'Airspace', description: 'Class A to E, one shelf per published step, sectional colors', minZoom: 6 },
     { key: 'sua', label: 'Special Use', description: 'Prohibited, Restricted, Warning, Alert areas and MOAs', minZoom: 5 },
-    { key: 'uasfm', label: 'UAS ceilings', description: 'FAA UAS Facility Map: max altitude without further authorization', minZoom: 9 },
+    { key: 'uasfm', label: 'UAS Ceilings', description: 'FAA UAS Facility Map: max altitude without further authorization', minZoom: 9 },
     { key: 'nsufr', label: 'UAS No-Fly', description: 'National Security UAS Flight Restrictions, surface to 400 ft AGL', minZoom: 0 },
     { key: 'obstacles', label: 'Obstacles', description: 'FAA Digital Obstacle File: towers, wires, turbines, stacks', minZoom: 9 },
     { key: 'metars', label: 'METARs', description: 'Flight category: VFR green, MVFR blue, IFR red, LIFR magenta', minZoom: 6 }
@@ -49,6 +49,7 @@ export const COLORS = {
     notamNavigation: '#b0bec5',
     notamOther: '#9e9e9e',
     plan: '#00bcd4',
+    target: '#ff5252',
     island: '#e01b24'
 };
 

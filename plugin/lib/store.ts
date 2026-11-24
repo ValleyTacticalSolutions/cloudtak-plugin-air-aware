@@ -17,8 +17,16 @@ export interface Settings {
     heightAboveTerrainFt: number;
     /** Planner: required vertical separation from obstacles, ft. */
     separationFt: number;
-    /** Planner: circle radius, ft. */
+    /** Planner: operating range, max distance from Home, ft. */
     radiusFt: number;
+    /** Planner: distance held from the target, ft (0 = overhead). */
+    standoffFt: number;
+    /** Planner: half-width of the transit corridor, ft. */
+    corridorFt: number;
+    /** Planner: cruise speed, mph. */
+    cruiseMph: number;
+    /** Planner: flight endurance per battery, minutes. */
+    enduranceMin: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -38,7 +46,11 @@ export const DEFAULT_SETTINGS: Settings = {
     activeTfrOnly: false,
     heightAboveTerrainFt: 400,
     separationFt: 100,
-    radiusFt: 2640
+    radiusFt: 2640,
+    standoffFt: 500,
+    corridorFt: 250,
+    cruiseMph: 25,
+    enduranceMin: 25
 };
 
 function load(): Settings {
@@ -94,37 +106,78 @@ export interface PlanObstacle {
     bearing: number;
 }
 
+export interface PlanUasCell {
+    ceilingFt: number;
+    airport: string;
+}
+
 export interface PlanResult {
     computedAt: string;
     terrain: 'map' | 'none';
     /** Where the ground elevation came from. */
     terrainSource?: string;
-    /** Ground at the takeoff point, ft MSL (internal reference only). */
-    launchGroundFt?: number;
-    /** Highest / lowest ground in the area relative to takeoff, ft (+ above, - below). */
+    /** Ground at Home, ft MSL (internal reference only). */
+    homeGroundFt?: number;
+    /** Ground at the target relative to Home, ft. */
+    targetRelFt?: number;
+    /** Highest / lowest ground in the flight area relative to Home, ft (+ above, - below). */
     riseFt?: number;
     dropFt?: number;
     samples: number;
-    /** The altitude the plan uses, ft AGL above takeoff (found, or the one entered). */
+
+    /** Home to target, ft, and the bearing from Home. */
+    targetDistanceFt: number;
+    targetBearing: number;
+    /** Home to the standoff point, ft. */
+    standoffDistanceFt: number;
+    /** Furthest point of the flight area from Home, ft. */
+    maxReachFt: number;
+    /** Line of sight from the standoff point at altitude to the target, ft. */
+    slantRangeFt?: number;
+    /** One-way transit, minutes, and time on station after a 20% reserve. */
+    transitMin?: number;
+    onStationMin?: number;
+
+    /** Lowest ground clearance altitude: highest ground + height over terrain, rounded up to 10 ft. */
+    floorAgl?: number;
+    /** Altitude needed to clear the highest obstacle top plus separation, ft above Home. */
+    obstacleNeedAgl?: number;
+    /** Highest legal altimeter reading: min(400, lowest grid) adjusted for ground below Home. */
+    maxAltitudeAgl?: number;
+    /** The most the plan may use: the legal maximum, or higher only as far as terrain or obstacles need. */
+    allowedMaxAgl?: number;
+    /** What took the plan above the legal maximum, if anything. */
+    raisedBy?: 'terrain' | 'obstacle';
+    /** The ceiling rule that set maxAltitudeAgl (400 ft or a grid value). */
+    capFt: number;
+    /** The altitude the plan uses, ft above Home. */
     altitudeAgl?: number;
-    /** Limit mode: the highest ground you can work over, relative to takeoff. */
-    workableRiseFt?: number;
+    /** A Set My Own value was lowered to the legal maximum. */
+    clamped?: boolean;
+    /** Share of the area where the altitude cannot hold the height over terrain. */
     tooHighPct?: number;
-    uasCeilingFt?: number;
-    uasAirport?: string;
+
+    /** UAS Facility Map cells overlapping the area, lowest first. */
+    uasCells: PlanUasCell[];
+    uasCeilingUsedFt?: number;
     obstacles: PlanObstacle[];
     obstaclesAbove: number;
     tfrs: string[];
     nsufr: string[];
     airspace: string[];
+    sua: string[];
+    notams: string[];
     warnings: string[];
 }
 
+export type Pick = 'home' | 'target' | false;
+
 export interface PlanState {
-    picking: boolean;
-    launch?: { lon: number; lat: number };
+    picking: Pick;
+    home?: { lon: number; lat: number };
+    target?: { lon: number; lat: number };
     mode: 'need' | 'given';
-    /** Limit mode: max altitude entered, ft AGL above takeoff. */
+    /** Set My Own: altitude entered, ft above Home. */
     givenAltitudeAgl?: number;
     computing: boolean;
     result?: PlanResult;
@@ -142,7 +195,7 @@ export const state = reactive({
         obstacles: { text: 'Off', loading: false },
         metars: { text: 'Off', loading: false }
     } as Record<LayerKey, LayerStatus>,
-    /** The pinned line: the UAS ceiling where the map is centred. */
+    /** The pinned line: the UAS ceiling at the map center. */
     here: '' as string,
     details: [] as Detail[],
     plan: {

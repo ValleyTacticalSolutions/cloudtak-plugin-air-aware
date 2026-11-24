@@ -19,10 +19,12 @@ const SRC = (k: string): string => `${PREFIX}-${k}`;
 const LYR = (k: string, part: string): string => `${PREFIX}-${k}-${part}`;
 const FONT = ['Open Sans Bold'];
 
-const SOURCES = ['tfr', 'notams', 'airspace', 'sua', 'uasfm', 'nsufr', 'obstacles', 'metars', 'plan', 'islands'] as const;
+const SOURCES = ['tfr', 'notams', 'airspace', 'sua', 'uasfm', 'nsufr', 'obstacles', 'metars', 'planhaz', 'plan', 'islands'] as const;
 
 /** Layers that answer a click, in priority order. */
 const CLICKABLE: string[] = [
+    LYR('planhaz', 'circle'),
+    LYR('planhaz', 'fill'),
     LYR('metars', 'circle'),
     LYR('obstacles', 'circle'),
     LYR('notams', 'circle'),
@@ -72,7 +74,21 @@ interface NsufrFeature {
     geometry?: { rings?: number[][][] };
 }
 
-type ObstacleRow = [string, string, number, number, number, number, string, string, number, string, string];
+export type ObstacleRow = [string, string, number, number, number, number, string, string, number, string, string];
+
+/** A view or plan bounding box. */
+export interface Box {
+    s: number;
+    w: number;
+    n: number;
+    e: number;
+    zoom: number;
+    center: [number, number];
+}
+
+type Remember = (d: Detail) => string;
+
+export type PlanHazardKind = 'tfr' | 'nsufr' | 'airspace' | 'sua' | 'notams';
 
 export class AirAwareLayers {
     map: MLMap;
@@ -80,8 +96,6 @@ export class AirAwareLayers {
 
     /** Click details per layer, swapped whole when the layer's data is replaced. */
     private details = new Map<string, Map<string, Detail>>();
-    /** The bag each in-flight load writes into. */
-    private bags = new Map<string, Map<string, Detail>>();
     private seq = 0;
     private timer: ReturnType<typeof setTimeout> | undefined;
     private generation: Record<string, number> = {};
@@ -93,10 +107,6 @@ export class AirAwareLayers {
     uasCells = new Map<string, { ceiling: number; airport: string }>();
     /** Obstacles the view has loaded (all heights), for the planner. */
     obstacles = new Map<string, ObstacleRow>();
-    /** TFR and No-Fly shapes, for the planner's "inside" checks. */
-    tfrFeatures: Feature[] = [];
-    nsufrFeatures: Feature[] = [];
-    airspaceFeatures: Feature[] = [];
 
     private readonly onMove = (): void => this.schedule();
     private readonly onClick = (e: MapMouseEvent): void => this.click(e);
@@ -126,6 +136,8 @@ export class AirAwareLayers {
             state.revision
         ], () => this.schedule(0)));
         this.stops.push(watch(() => state.settings.volumes, () => this.applyVisibility()));
+        // While a flight plan is up, only the planner's overlapping hazards are drawn.
+        this.stops.push(watch(planActive, () => this.applyVisibility()));
 
         // NOTAMs and METARs change all day; TFRs every few minutes.
         this.refreshInterval = setInterval(() => this.schedule(0), 3 * 60_000);
@@ -258,6 +270,13 @@ export class AirAwareLayers {
             dot('metars', 7),
             label('metars', 6, 11, { 'text-offset': [0, 1.3], 'text-anchor': 'top' }),
             {
+                id: LYR('planhaz', 'fill'), type: 'fill', source: SRC('planhaz'), filter: polys,
+                paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['coalesce', ['get', 'fillOpacity'], 0.2] }
+            },
+            line('planhaz', 1.5, undefined, polys),
+            dot('planhaz', ['interpolate', ['linear'], ['zoom'], 9, 3, 14, 6], points),
+            label('planhaz', 10, 10, { 'text-offset': [0, 1.0], 'text-anchor': 'top' }),
+            {
                 id: LYR('islands', 'circle'), type: 'circle', source: SRC('islands'),
                 paint: {
                     'circle-color': ['get', 'color'],
@@ -266,11 +285,25 @@ export class AirAwareLayers {
                     'circle-blur': 0.6
                 }
             },
-            fill('plan', 0.06, polys),
-            line('plan', 2.5, [2, 1], polys),
             {
-                id: LYR('plan', 'launch'), type: 'circle', source: SRC('plan'), filter: points,
-                paint: { 'circle-color': COLORS.plan, 'circle-radius': 8, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 }
+                id: LYR('plan', 'fill'), type: 'fill', source: SRC('plan'),
+                filter: ['all', polys, ['!', ['to-boolean', ['get', 'ring']]]],
+                paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.08 }
+            },
+            {
+                id: LYR('plan', 'line'), type: 'line', source: SRC('plan'),
+                filter: ['all', ['!=', ['geometry-type'], 'Point'], ['!', ['to-boolean', ['get', 'ring']]]],
+                paint: { 'line-color': ['get', 'color'], 'line-width': 2.5 }
+            },
+            {
+                id: LYR('plan', 'ring'), type: 'line', source: SRC('plan'),
+                filter: ['to-boolean', ['get', 'ring']],
+                paint: { 'line-color': ['get', 'color'], 'line-width': 1.5, 'line-dasharray': [3, 2] }
+            },
+            label('plan', 8, 12, { 'text-offset': [0, 1.3], 'text-anchor': 'top' }),
+            {
+                id: LYR('plan', 'point'), type: 'circle', source: SRC('plan'), filter: points,
+                paint: { 'circle-color': ['get', 'color'], 'circle-radius': ['coalesce', ['get', 'radius'], 8], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 2 }
             }
         ];
     }
@@ -278,11 +311,12 @@ export class AirAwareLayers {
     applyVisibility(): void {
         if (!this.map.getSource(SRC('plan'))) return;
         const vol = state.settings.volumes;
+        const planning = planActive();
         const set = (id: string, on: boolean): void => {
             if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
         };
         for (const l of LAYERS) {
-            const on = state.settings.layers[l.key];
+            const on = state.settings.layers[l.key] && !planning;
             for (const part of ['fill', 'line', 'label', 'circle']) set(LYR(l.key, part), on);
             set(LYR(l.key, 'ext'), on && vol);
             if (['tfr', 'airspace', 'sua'].includes(l.key)) set(LYR(l.key, 'fill'), on && !vol);
@@ -294,13 +328,8 @@ export class AirAwareLayers {
         if (src) src.setData(fc);
     }
 
-    private remember(key: LayerKey, d: Detail): string {
+    private store(bag: Map<string, Detail>, d: Detail): string {
         const id = `aa${++this.seq}`;
-        let bag = this.bags.get(key);
-        if (!bag) {
-            bag = new Map();
-            this.bags.set(key, bag);
-        }
         bag.set(id, d);
         return id;
     }
@@ -318,6 +347,35 @@ export class AirAwareLayers {
         this.setData('plan', fc);
     }
 
+    /** Overlapping hazards for the plan, with the details their taps open. */
+    setPlanHazards(fc: FeatureCollection, bag?: Map<string, Detail>): void {
+        this.setData('planhaz', fc);
+        if (bag) this.details.set('planhaz', bag);
+        else this.details.delete('planhaz');
+    }
+
+    /** File a detail for a planner feature into the bag it will be committed with. */
+    planDetail(bag: Map<string, Detail>, d: Detail): string {
+        return this.store(bag, d);
+    }
+
+    /**
+     * TFRs, No-Fly areas, airspace, special use and NOTAMs for a box, whatever the
+     * layer switches say. A source that cannot be read comes back as null.
+     */
+    async loadForPlan(box: Box, bag: Map<string, Detail>): Promise<Record<PlanHazardKind, Feature[] | null>> {
+        const rem: Remember = (d) => this.store(bag, d);
+        const grab = (p: Promise<{ fc: FeatureCollection }>): Promise<Feature[] | null> => p.then((r) => r.fc.features).catch(() => null);
+        const [tfr, nsufr, airspace, sua, notams] = await Promise.all([
+            grab(this.loadTfr(rem)),
+            grab(this.loadNsufr(rem)),
+            grab(this.loadAirspace(box, false, rem)),
+            grab(this.loadAirspace(box, true, rem)),
+            grab(this.loadNotams(box, rem))
+        ]);
+        return { tfr, nsufr, airspace, sua, notams };
+    }
+
     setIslands(fc: FeatureCollection): void {
         this.setData('islands', fc);
     }
@@ -333,7 +391,7 @@ export class AirAwareLayers {
         }, delay);
     }
 
-    private bounds(): { s: number; w: number; n: number; e: number; zoom: number; center: [number, number] } {
+    private bounds(): Box {
         const b = this.map.getBounds();
         const c = this.map.getCenter();
         return {
@@ -378,16 +436,16 @@ export class AirAwareLayers {
             let fc: FeatureCollection;
             let text: string;
             const bag = new Map<string, Detail>();
-            this.bags.set(key, bag);
+            const rem: Remember = (d) => this.store(bag, d);
             switch (key) {
-                case 'tfr': ({ fc, text } = await this.loadTfr()); break;
-                case 'notams': ({ fc, text } = await this.loadNotams(view)); break;
-                case 'airspace': ({ fc, text } = await this.loadAirspace(view, false)); break;
-                case 'sua': ({ fc, text } = await this.loadAirspace(view, true)); break;
+                case 'tfr': ({ fc, text } = await this.loadTfr(rem)); break;
+                case 'notams': ({ fc, text } = await this.loadNotams(view, rem)); break;
+                case 'airspace': ({ fc, text } = await this.loadAirspace(view, false, rem)); break;
+                case 'sua': ({ fc, text } = await this.loadAirspace(view, true, rem)); break;
                 case 'uasfm': ({ fc, text } = await this.loadUas(view)); break;
-                case 'nsufr': ({ fc, text } = await this.loadNsufr()); break;
-                case 'obstacles': ({ fc, text } = await this.loadObstacles(view)); break;
-                case 'metars': ({ fc, text } = await this.loadMetar(view)); break;
+                case 'nsufr': ({ fc, text } = await this.loadNsufr(rem)); break;
+                case 'obstacles': ({ fc, text } = await this.loadObstacles(view, rem)); break;
+                case 'metars': ({ fc, text } = await this.loadMetar(view, rem)); break;
             }
             if (this.generation[key] !== gen || !this.active) return;
             this.setData(key, fc);
@@ -408,7 +466,7 @@ export class AirAwareLayers {
 
     // ---- TFR ----
 
-    private async loadTfr(): Promise<{ fc: FeatureCollection; text: string }> {
+    private async loadTfr(rem: Remember): Promise<{ fc: FeatureCollection; text: string }> {
         const { tfrs, failed } = await loadTfrs();
         const features: Feature[] = [];
         let active = 0, scheduled = 0;
@@ -430,7 +488,7 @@ export class AirAwareLayers {
                 if (!geom) continue;
                 if (on) active++; else scheduled++;
                 const color = on ? COLORS.tfrActive : COLORS.tfrScheduled;
-                const id = this.remember('tfr', this.tfrDetail(t, a, on, color));
+                const id = rem(this.tfrDetail(t, a, on, color));
                 features.push({
                     type: 'Feature',
                     geometry: geom,
@@ -445,7 +503,6 @@ export class AirAwareLayers {
                 });
             }
         }
-        this.tfrFeatures = features;
         const text = `${active} in effect, ${scheduled} scheduled (${tfrs.length} national)` + (failed ? `, ${failed} details unreachable` : '');
         return { fc: { type: 'FeatureCollection', features }, text };
     }
@@ -469,7 +526,7 @@ export class AirAwareLayers {
 
     // ---- NOTAMs ----
 
-    private async loadNotams(v: ReturnType<AirAwareLayers['bounds']>): Promise<{ fc: FeatureCollection; text: string }> {
+    private async loadNotams(v: Box, rem: Remember): Promise<{ fc: FeatureCollection; text: string }> {
         const m = await manifest('notams');
         const keys = keysFor(m, v.s, v.w, v.n, v.e);
         const tiles = await Promise.all(keys.map((k) => tile<{ notams: NotamRow[] }>('notams', k, m).catch(() => null)));
@@ -484,7 +541,7 @@ export class AirAwareLayers {
                 const color = notamColor(kind);
                 const start = n.s ? Date.parse(n.s) : 0;
                 const activeNow = !start || start <= now;
-                const id = this.remember('notams', {
+                const id = rem({
                     title: `NOTAM ${n.n || n.id}`,
                     subtitle: `${n.icao || n.loc || ''} · ${kindName(kind)}`,
                     color,
@@ -513,7 +570,7 @@ export class AirAwareLayers {
 
     // ---- Airspace / Special Use ----
 
-    private async loadAirspace(v: ReturnType<AirAwareLayers['bounds']>, sua: boolean): Promise<{ fc: FeatureCollection; text: string }> {
+    private async loadAirspace(v: Box, sua: boolean, rem: Remember): Promise<{ fc: FeatureCollection; text: string }> {
         const m = await manifest('airspace');
         const keys = keysFor(m, v.s, v.w, v.n, v.e);
         const [wide, ...tiles] = await Promise.all([
@@ -538,7 +595,7 @@ export class AirAwareLayers {
                 const name = String(a.NAME_TXT || '').trim();
                 const cls = String(a.CLASS_CODE || '').trim();
                 const local = String(a.LOCALTYPE_TXT || '').replace(/_/g, ' ');
-                const id = this.remember(sua ? 'sua' : 'airspace', {
+                const id = rem({
                     title: name || local,
                     subtitle: sua ? local : `Class ${cls}${local && local !== `CLASS ${cls}` ? ` (${local})` : ''}`,
                     color,
@@ -564,14 +621,13 @@ export class AirAwareLayers {
                 });
             }
         }
-        if (!sua) this.airspaceFeatures = features;
         const text = `${features.length} ${sua ? 'special use areas' : 'airspace shelves'} in view` + (m.cycle ? ` · cycle ${m.cycle}` : '');
         return { fc: { type: 'FeatureCollection', features }, text };
     }
 
     // ---- UAS Facility Map ----
 
-    private async loadUas(v: ReturnType<AirAwareLayers['bounds']>): Promise<{ fc: FeatureCollection; text: string }> {
+    private async loadUas(v: Box): Promise<{ fc: FeatureCollection; text: string }> {
         const m = await manifest('uasfm');
         const per = 120;
         const keys = keysFor(m, v.s, v.w, v.n, v.e, 9);
@@ -609,13 +665,13 @@ export class AirAwareLayers {
         const c = this.map.getCenter();
         const cell = this.uasCells.get(`${Math.floor(c.lat * 120)}_${Math.floor(c.lng * 120)}`);
         if (this.map.getZoom() < 9) {
-            state.here = 'Zoom in to read the UAS ceiling at the map centre';
+            state.here = 'Zoom in to read the UAS ceiling at the map center';
         } else if (cell) {
             state.here = cell.ceiling <= 0
-                ? `Map centre: UAS ceiling 0 ft — authorization required to fly at all (${cell.airport})`
-                : `Map centre: UAS ceiling ${cell.ceiling} ft AGL without further authorization (${cell.airport})`;
+                ? `Map Center: UAS ceiling 0 ft — authorization required to fly at all (${cell.airport})`
+                : `Map Center: UAS ceiling ${cell.ceiling} ft AGL without further authorization (${cell.airport})`;
         } else {
-            state.here = 'Map centre: not on the UAS Facility Map — no LAANC grid here (check airspace class)';
+            state.here = 'Map Center: not on the UAS Facility Map — no LAANC grid here (check airspace class)';
         }
     }
 
@@ -625,7 +681,7 @@ export class AirAwareLayers {
 
     // ---- NSUFR ----
 
-    private async loadNsufr(): Promise<{ fc: FeatureCollection; text: string }> {
+    private async loadNsufr(rem: Remember): Promise<{ fc: FeatureCollection; text: string }> {
         const m = await manifest('nsufr');
         const pack = await packFile<{ features: NsufrFeature[] }>('nsufr', 'nsufr', m);
         const features: Feature[] = [];
@@ -640,17 +696,16 @@ export class AirAwareLayers {
                 if (val === null || val === '' || k === 'OBJECTID' || k.startsWith('Shape')) continue;
                 rows.push({ label: k.replace(/_/g, ' '), value: String(val) });
             }
-            const id = this.remember('nsufr', { title: facility, subtitle: 'National Security UAS Flight Restriction', color, rows });
+            const id = rem({ title: facility, subtitle: 'National Security UAS Flight Restriction', color, rows });
             features.push({ type: 'Feature', geometry: geom, properties: { aaid: id, color, label: facility, name: facility } });
         }
-        this.nsufrFeatures = features;
         const text = `${features.length.toLocaleString('en-US')} restricted facilities nationally` + (m.cycle ? ` · cycle ${m.cycle}` : '');
         return { fc: { type: 'FeatureCollection', features }, text };
     }
 
     // ---- Obstacles ----
 
-    private async loadObstacles(v: ReturnType<AirAwareLayers['bounds']>): Promise<{ fc: FeatureCollection; text: string }> {
+    private async loadObstacles(v: Box, rem: Remember): Promise<{ fc: FeatureCollection; text: string }> {
         const m = await manifest('obstacles');
         const keys = keysFor(m, v.s, v.w, v.n, v.e, 9);
         const tiles = await Promise.all(keys.map((k) => tile<{ obstacles: ObstacleRow[] }>('obstacles', k, m).catch(() => null)));
@@ -667,7 +722,7 @@ export class AirAwareLayers {
                     hidden++;
                     continue;
                 }
-                const id = this.remember('obstacles', obstacleDetail(o));
+                const id = rem(obstacleDetail(o));
                 features.push({
                     type: 'Feature',
                     geometry: { type: 'Point', coordinates: [lon, lat] },
@@ -685,8 +740,8 @@ export class AirAwareLayers {
 
     // ---- METARs ----
 
-    private async loadMetar(v: ReturnType<AirAwareLayers['bounds']>): Promise<{ fc: FeatureCollection; text: string }> {
-        // aviationweather.gov answers a bounded box; keep it centred on the view.
+    private async loadMetar(v: Box, rem: Remember): Promise<{ fc: FeatureCollection; text: string }> {
+        // aviationweather.gov answers a bounded box; keep it centered on the view.
         const halfLat = Math.min(5, (v.n - v.s) / 2 + 0.2);
         const halfLon = Math.min(7, (v.e - v.w) / 2 + 0.2);
         const rows = await loadMetars(
@@ -698,7 +753,7 @@ export class AirAwareLayers {
             return {
                 type: 'Feature',
                 geometry: { type: 'Point', coordinates: [r.lon, r.lat] },
-                properties: { aaid: this.remember('metars', metarDetail(r, color)), color, label: `${r.icaoId} ${r.fltCat || ''}`.trim() }
+                properties: { aaid: rem(metarDetail(r, color)), color, label: `${r.icaoId} ${r.fltCat || ''}`.trim() }
             };
         });
         return { fc: { type: 'FeatureCollection', features }, text: `${features.length} stations reporting` };
@@ -707,9 +762,10 @@ export class AirAwareLayers {
     // ---- Clicks ----
 
     private click(e: MapMouseEvent): void {
-        if (state.plan.picking) {
+        const pick = state.plan.picking;
+        if (pick) {
             state.plan.picking = false;
-            state.plan.launch = { lon: e.lngLat.lng, lat: e.lngLat.lat };
+            state.plan[pick] = { lon: e.lngLat.lng, lat: e.lngLat.lat };
             this.map.getCanvas().style.cursor = '';
             return;
         }
@@ -752,6 +808,11 @@ export class AirAwareLayers {
 }
 
 // ---- helpers ----
+
+/** A flight plan is up once both Home and the target are set. */
+export function planActive(): boolean {
+    return Boolean(state.plan.home && state.plan.target);
+}
 
 function notamColor(kind: string): string {
     switch (kind) {
@@ -820,13 +881,13 @@ function esriVert(a: Record<string, string | number | null>, which: 'LOWER' | 'U
     return { text: `${Math.round(ft).toLocaleString('en-US')} ft ${ref}`, short: String(Math.round(ft / 100)), ft };
 }
 
-function airportName(s: string | undefined): string {
+export function airportName(s: string | undefined): string {
     if (!s) return '—';
     const [id, name] = s.split('|');
     return name ? `${id} ${name}` : id;
 }
 
-function obstacleDetail(o: ObstacleRow): Detail {
+export function obstacleDetail(o: ObstacleRow): Detail {
     const [oas, type, lat, lon, agl, , lighting, verified, quantity, city, st] = o;
     return {
         title: `${type} ${agl} ft AGL`,

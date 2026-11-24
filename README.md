@@ -14,21 +14,21 @@ Eight layers, each switched on or off on its own:
 | **NOTAMs** | Drone operations, parachute drops, unlit towers, cranes, closed runways. Colored by kind, with the FAA text as issued. Zoom 7+. | FAA NOTAM Management Service, via the takwerx relay (republished every few minutes) |
 | **Airspace** | Class A–E. Each published shelf is drawn separately, in sectional colors (B/D blue, C/E magenta, Class E from 1,200 ft AGL blue). Zoom 6+. | FAA AIS airspace, takwerx pack |
 | **Special Use** | Prohibited, Restricted, Warning and Alert areas, and MOAs, with hours (continuous or activated by NOTAM). Zoom 5+. | FAA AIS airspace, takwerx pack |
-| **UAS ceilings** | The FAA UAS Facility Map grid, colored from 0 ft (red) to 400 ft (green). A pinned line states the ceiling at the map centre. Zoom 9+. | FAA UASFM, takwerx pack |
+| **UAS Ceilings** | The FAA UAS Facility Map grid, colored from 0 ft (red) to 400 ft (green). A pinned line states the ceiling at the map center. Zoom 9+. | FAA UASFM, takwerx pack |
 | **UAS No-Fly** | National Security UAS Flight Restrictions: bases, labs, dams and nuclear sites, surface to 400 ft AGL. The details include the FAA point of contact. | FAA NSUFR, takwerx pack |
 | **Obstacles** | Digital Obstacle File towers, wires, turbines and stacks, labelled with height AGL and top MSL. You can filter by height and type. Zoom 9+. | FAA DOF, takwerx pack |
 | **METARs** | Flight-category dots: VFR green, MVFR blue, IFR red, LIFR magenta, as published (never derived). Zoom 6+. | aviationweather.gov |
 
-Tapping anything on the map opens its details. They appear in the sidebar's **Details** tab, or in a floating pane if the sidebar is closed.
+Tapping anything on the map opens its details in a floating pane.
 
-**UAS planner** (Planner tab). Every height is in ft AGL from the takeoff point, the way the drone's altimeter reads it:
-- Set a takeoff point by tapping the map or using the map centre.
-- Pick the operating range: ¼, ½, 1 or 1½ mi, or a custom distance. The ring on the map follows the choice immediately.
-- **Find my altitude**: the highest ground in range relative to takeoff, plus the height you hold over the terrain (default 400 ft), rounded up to the next 10 ft.
-- **I have an altitude limit**: enter your max altitude in ft AGL. It shows the highest ground you can work over and how much of the range is too high (red on the map, blue workable).
-- Terrain in range is shown relative to takeoff (for example −40 ft to +320 ft).
-- Obstacles in range are listed nearest first, with their height, top relative to takeoff, lighting, distance and direction. Any that reach your altitude (with your clearance added) are flagged.
-- Shows the UAS Facility Map ceiling at takeoff, and any TFR, UAS No-Fly area or airspace touching the range. It warns when your altitude is over 400 ft AGL (Part 107) or over the facility map ceiling.
+**UAS Flight Planner** tab. It walks you through the plan one step at a time, and everything recalculates as you change it. Every height is in ft above Home, the way the drone's altimeter reads it:
+1. **Home / Takeoff Point**: tap the map or use the map center. Shows ground elevation and the UAS grid ceiling there.
+2. **Target / Area Of Interest**: tap the map or use the map center. Shows distance, bearing and ground difference from Home.
+3. **Mission Profile**: operating range from Home (¼, ½, ¾, 1, 1½ mi or custom) and target standoff (overhead, 250 ft, 500 ft, 1000 ft, ¼ mi or custom). The flight area is a corridor from Home to the standoff point plus a ring around the target. Shows the furthest point from Home (warns past your range), slant range to the target, transit time and time on station from cruise speed and battery endurance (20% reserve).
+4. **Altitude**: **Recommend** (highest ground in the area plus the height you hold over terrain, rounded up to 10 ft) or **Set My Own**. Capped at the lower of 400 ft and the lowest UAS grid ceiling overlapping the area (a 300 ft and a 200 ft cell means 200 ft), less any drop of the ground below Home. Terrain or obstacles (tallest top plus your clearance) can raise it above that cap, but only as far as clearing them needs. Terrain the altitude cannot clear is shaded red on the map.
+5. **Flight Area Check**: only what overlaps the flight area: UAS grid cells, obstacles (flagged when they reach your altitude plus clearance), TFRs, UAS No-Fly areas, airspace, special use airspace and NOTAMs.
+
+While a plan is up, the map shows only the hazards that overlap the flight area, whatever the Layers switches say. Clear the plan to browse the layers again.
 
 Settings (layers, obstacle filters, planner numbers) are stored per browser.
 
@@ -42,7 +42,7 @@ Settings (layers, obstacle filters, planner numbers) are stored per browser.
 ### Differences from the ATAK plugin
 
 - No offline tile store. CloudTAK's API server caches the data in memory instead (manifests for hours, NOTAMs for 3 minutes, TFRs for 5 minutes, METARs for 5 minutes).
-- The planner uses a range ring around the takeoff point and works in AGL from takeoff. Drawn-polygon plan areas, "make a geofence from a restriction", and the LAANC / DroneZone / Flight Service links are not included.
+- The planner uses a Home-to-target corridor and target ring and works in ft above Home. Drawn-polygon plan areas, "make a geofence from a restriction", and the LAANC / DroneZone / Flight Service links are not included.
 - Terrain comes from CloudTAK's terrain (DEM overlay or the server's Default Terrain), not ATAK's elevation data. The default height above terrain is 400 ft.
 - 3D volumes start at the map's ground plane and are not corrected for terrain. Read the published numbers on the details page.
 

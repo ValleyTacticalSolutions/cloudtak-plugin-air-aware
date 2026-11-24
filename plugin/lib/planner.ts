@@ -29,6 +29,9 @@ export interface PlanGeometry {
     /** Distance actually held from the target, m (shorter when Home is closer than the standoff). */
     standoffM: number;
     corridor: Polygon;
+    /** Standoff ring: exactly the standoff distance from the target (what is drawn). */
+    ring: Polygon;
+    /** Standoff ring widened by the corridor buffer (used for hazard checks only). */
     orbit: Polygon;
     area: Area;
 }
@@ -45,8 +48,10 @@ export function planGeometry(): PlanGeometry | undefined {
     const standoffM = Math.min(wantM, dist);
     const standoff: LL = standoffM > 0 ? destination(target, standoffM, bearing(target, home)) : target;
     const corridorPoly = corridor(home, standoff, halfW);
+    // Standoff 0 (overhead): a small 10 ft ring still marks the target.
+    const ring = circle(target, wantM > 0 ? wantM : 10 * M_PER_FT);
     const orbit = circle(target, wantM + halfW);
-    return { home, target, standoff, standoffM, corridor: corridorPoly, orbit, area: makeArea([corridorPoly, orbit]) };
+    return { home, target, standoff, standoffM, corridor: corridorPoly, ring, orbit, area: makeArea([corridorPoly, orbit]) };
 }
 
 /** What the plan layer draws: range ring, flight area, track and the three points. */
@@ -64,7 +69,7 @@ export function planShape(): FeatureCollection {
     if (g) {
         features.push(
             { type: 'Feature', geometry: g.corridor, properties: { color: COLORS.plan } },
-            { type: 'Feature', geometry: g.orbit, properties: { color: COLORS.target } },
+            { type: 'Feature', geometry: g.ring, properties: { color: COLORS.target } },
             { type: 'Feature', geometry: { type: 'LineString', coordinates: [g.home, g.standoff] }, properties: { color: COLORS.plan } }
         );
         if (g.standoffM > 0) {

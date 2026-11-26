@@ -181,9 +181,6 @@
                 </div>
             </section>
 
-            <!-- Weather at Home -->
-            <WeatherSection v-if='state.plan.home' />
-
             <template v-if='planOn'>
                 <!-- Mission -->
                 <section>
@@ -478,6 +475,9 @@
                     </template>
                 </section>
             </template>
+
+            <!-- Weather at Home -->
+            <WeatherSection v-if='state.plan.home' />
 
             <TablerButton
                 v-if='state.plan.home || state.plan.target'

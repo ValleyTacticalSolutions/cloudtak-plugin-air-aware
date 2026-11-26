@@ -1,6 +1,6 @@
 {
   "name": "cloudtak-plugin-air-aware",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "type": "module",
   "description": "CloudTAK plugin: TFRs, NOTAMs, airspace, UAS ceilings, UAS no-fly zones, obstacles, METARs and a UAS flight planner. Port of the takwerx AirAware ATAK plugin.",
   "license": "AGPL-3.0-or-later",

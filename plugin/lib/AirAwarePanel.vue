@@ -181,6 +181,9 @@
                 </div>
             </section>
 
+            <!-- Weather at Home -->
+            <WeatherSection v-if='state.plan.home' />
+
             <template v-if='planOn'>
                 <!-- Mission -->
                 <section>
@@ -384,6 +387,18 @@
                     </div>
                     <template v-else>
                         <div
+                            v-for='c in wxAlarms'
+                            :key='c.key'
+                            class='aa-warn'
+                            :class='{ "aa-warn-fail": c.level === "fail" }'
+                        >
+                            <IconAlertTriangle
+                                :size='16'
+                                class='flex-shrink-0'
+                            />
+                            <span>Weather · {{ c.label }} {{ c.value }}: {{ c.note }}</span>
+                        </div>
+                        <div
                             v-for='w in r.warnings'
                             :key='w'
                             class='aa-warn'
@@ -578,6 +593,8 @@
                 step='1'
                 class='form-control'
             >
+            <WeatherAlarms />
+
             <TablerButton
                 v-if='!confirmReset'
                 class='btn-outline-secondary aa-action w-100 mt-2'
@@ -643,6 +660,9 @@ import { clearPlan, computePlan, planShape, startPlan, PART_107_FT } from './pla
 import { bearing, compass, distanceM, FT_PER_M } from './geo.ts';
 import { dUnit, fmtDist, fmtH, fmtRel, fromD, fromH, fromS, hUnit, metric, sUnit, toD, toH, toS } from './units.ts';
 import { planActive } from './layers.ts';
+import WeatherSection from './WeatherSection.vue';
+import WeatherAlarms from './WeatherAlarms.vue';
+import { wxChecks } from './weather.ts';
 
 const tabs = [
     { value: 'layers', label: 'Layers' },
@@ -655,6 +675,10 @@ const OBSTACLE_TYPES = ['TOWER', 'T-L TWR', 'POLE', 'BLDG', 'WINDMILL', 'STACK',
 
 const planOn = computed(planActive);
 const r = computed(() => state.plan.result);
+/** Out-of-limit and cautionary weather, worst first. */
+const wxAlarms = computed(() => wxChecks.value
+    .filter((c) => c.level !== 'ok')
+    .sort((a, b) => Number(b.level === 'fail') - Number(a.level === 'fail')));
 
 // ---- operating range (presets in the display units) ----
 
@@ -1068,6 +1092,9 @@ function reset(): void {
     color: #ffb300;
     font-size: 0.8rem;
     margin-bottom: 4px;
+}
+.aa-warn-fail {
+    color: #ff4d55;
 }
 .aa-table td {
     padding: 3px 4px;

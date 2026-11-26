@@ -1,6 +1,8 @@
 import { reactive, watch } from 'vue';
 import type { LayerKey } from './constants.ts';
 import type { Units } from './units.ts';
+import { DEFAULT_WX_LIMITS, type WxLimits, type WxValues } from './wx.ts';
+import type { WxStation } from './weather.ts';
 
 const STORAGE_KEY = 'air-aware-settings-v2';
 
@@ -28,6 +30,8 @@ export interface Settings {
     enduranceMin: number;
     /** Display units. */
     units: Units;
+    /** Planner: weather alarm limits. */
+    weather: WxLimits;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -52,7 +56,8 @@ export const DEFAULT_SETTINGS: Settings = {
     corridorFt: 250,
     cruiseMph: 25,
     enduranceMin: 25,
-    units: 'imperial'
+    units: 'imperial',
+    weather: DEFAULT_WX_LIMITS
 };
 
 function load(): Settings {
@@ -64,7 +69,8 @@ function load(): Settings {
         return {
             ...base,
             ...saved,
-            layers: { ...base.layers, ...(saved.layers || {}) }
+            layers: { ...base.layers, ...(saved.layers || {}) },
+            weather: { ...base.weather, ...(saved.weather || {}) }
         };
     } catch {
         return base;
@@ -183,6 +189,19 @@ export interface PlanState {
     result?: PlanResult;
 }
 
+export interface WeatherState {
+    loading: boolean;
+    error?: string;
+    /** The Home position the report was fetched for. */
+    key?: string;
+    /** Nearest stations first. */
+    stations: WxStation[];
+    station?: WxStation;
+    /** The values checked: filled from the station, editable. */
+    values: WxValues;
+    edited: boolean;
+}
+
 export const state = reactive({
     settings: load(),
     status: {
@@ -204,6 +223,7 @@ export const state = reactive({
         mode: 'need',
         computing: false
     } as PlanState,
+    weather: { loading: false, stations: [], values: {}, edited: false } as WeatherState,
     /** Bumped when a layer needs a reload (settings changed, manual refresh). */
     revision: 0
 });

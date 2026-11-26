@@ -1,4 +1,4 @@
-import { std } from '../../../src/std.ts';
+import { std } from './host.ts';
 import { API } from './constants.ts';
 import { fromListRow, parseDetail, validNotamId, type Tfr, type TfrListRow } from './tfr.ts';
 

@@ -1,6 +1,6 @@
 {
   "name": "cloudtak-plugin-air-aware",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "module",
   "description": "CloudTAK plugin: TFRs, NOTAMs, airspace, UAS ceilings, UAS no-fly zones, obstacles, METARs and a UAS flight planner. Port of the takwerx AirAware ATAK plugin.",
   "license": "AGPL-3.0-or-later",
@@ -9,9 +9,11 @@
     "url": "https://github.com/ValleyTacticalSolutions/cloudtak-plugin-air-aware.git"
   },
   "cloudtak": {
+    "name": "Air Aware",
     "minVersion": "13.124.0"
   },
   "scripts": {
-    "verify": "bash verify-cloudtak.sh . air-aware"
+    "verify": "bash verify-cloudtak.sh . air-aware",
+    "bundle": "node bundle/build.mjs"
   }
 }

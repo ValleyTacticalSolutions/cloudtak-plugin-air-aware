@@ -8,7 +8,7 @@
  *   3. MapLibre's own terrain, when 3D terrain is on (queryTerrainElevation)
  */
 import type { Map as MLMap, RasterDEMTileSource } from 'maplibre-gl';
-import { std, stdurl, getRuntimeToken } from '../../../src/std.ts';
+import { std, apiUrl, getServerUrl, getToken } from './host.ts';
 import { FT_PER_M } from './geo.ts';
 
 type Encoding = 'terrarium' | 'mapbox';
@@ -74,7 +74,7 @@ function serverDefault(): Promise<DemSource | null> {
             const cfg = await std('/api/config?keys=map::terrain') as Record<string, unknown>;
             const id = Number(cfg['map::terrain']);
             if (!id || id < 1) return null;
-            const token = await getRuntimeToken();
+            const token = await getToken();
             const q = token ? `?token=${encodeURIComponent(token)}` : '';
             // CloudTAK v14 serves basemap tiles from the PMTiles tile server
             const tileCfg = await std('/api/config/tiles') as { url?: string };
@@ -104,8 +104,8 @@ function tileUrl(src: DemSource, z: number, x: number, y: number): string {
 
 async function fetchTile(url: string): Promise<ImageData | null> {
     let blob: Blob;
-    const abs = stdurl(url);
-    if (abs.origin === stdurl('/').origin) {
+    const abs = await apiUrl(url);
+    if (abs.origin === new URL(await getServerUrl()).origin) {
         // CloudTAK's own API: std adds the session token.
         const res = await std(abs) as Response;
         if (!(res instanceof Response)) return null;

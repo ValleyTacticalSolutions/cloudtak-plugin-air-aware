@@ -2,7 +2,7 @@ import type { App } from 'vue';
 import { h, markRaw } from 'vue';
 import type { PluginAPI, PluginInstance } from '@tak-ps/cloudtak';
 import { IconDrone } from '@tabler/icons-vue';
-import MenuTemplate from '../../src/components/CloudTAK/util/MenuTemplate.vue';
+import MenuTemplate from './lib/MenuTemplate.vue';
 import AirAwarePanel from './lib/AirAwarePanel.vue';
 import DetailsView from './lib/DetailsView.vue';
 import HeaderButtons from './lib/HeaderButtons.vue';
@@ -24,7 +24,7 @@ export default class AirAware implements PluginInstance {
             path: ROUTE_PATH,
             name: ROUTE_NAME,
             component: {
-                render: () => h(MenuTemplate, { name: 'Air Aware', back: false }, {
+                render: () => h(MenuTemplate, { name: 'Air Aware' }, {
                     buttons: () => h(HeaderButtons),
                     default: () => h(AirAwarePanel)
                 })

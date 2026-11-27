@@ -25,11 +25,15 @@ if [ -d "$SRC/public" ]; then
 fi
 cd "$CT/app"
 [ -d node_modules ] || npm install --no-audit --no-fund
-npm run lint && npm run check && npm run build
+# Separate lines: a failure inside an && chain does not trip set -e, so PASS could print after a failed lint
+npm run lint
+npm run check
+npm run build
 if ls "$PLUGIN"/server/*.ts >/dev/null 2>&1; then
   cp "$PLUGIN"/server/*.ts "$CT/api/stateless/routes/"
   cd "$CT/api"
   [ -d node_modules ] || npm install --no-audit --no-fund
-  npm run lint && npx tsc --noEmit
+  npm run lint
+  npx tsc --noEmit
 fi
 echo "PASS: plugin builds against CloudTAK $REF"

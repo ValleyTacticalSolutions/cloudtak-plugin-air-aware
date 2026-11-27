@@ -2,7 +2,7 @@
 
 A CloudTAK plugin for crews working under or in the air. It answers two questions: what is in the column of air I am in, and what am I allowed to do here. It is a port of the takwerx [AirAware ATAK plugin](https://github.com/takwerx/air-aware). It reads the same published data packs and FAA feeds, draws them on CloudTAK's map, and adds a UAS flight planner.
 
-**Minimum CloudTAK: v13.124.0**. Built and verified against CloudTAK v13.124.0 (commit 5cb43c9, 2026-11-20). There is no upper limit, and newer CloudTAK versions are expected to work. Please report breakage as an issue.
+**Minimum CloudTAK: v14.4.1**. Built and verified against CloudTAK v14.4.1 (commit 184ecb2, 2026-11-27). There is no upper limit, and newer CloudTAK versions are expected to work. Please report breakage as an issue.
 
 ## What it does
 
@@ -95,7 +95,7 @@ For the planner's ground readouts, CloudTAK needs terrain data: either a **Defau
   ]
 }
 ```
-<!-- Requires CloudTAK v13.124.0 or newer (catalog has no version field; this note is for reviewers). -->
+<!-- Requires CloudTAK v14.4.1 or newer (catalog has no version field; this note is for reviewers). -->
 
 To list it: submit the repo URL through TAK Portal's CloudTAK Marketplace plugin request form, or open an issue/PR on ValleyTacticalSolutions/TAK-Portal adding the entry to `catalog/cloudtak-plugins.json`.
 
@@ -124,13 +124,28 @@ All routes require a signed-in CloudTAK user. None of them accepts a URL from th
 
 ## Core imports
 
-- `../../src/components/CloudTAK/util/MenuTemplate.vue` (sidebar page frame)
-- `../../../src/std.ts` (`std`, authenticated calls to CloudTAK's API)
+None. The plugin no longer imports anything from CloudTAK's `src/`, so it also works as a runtime bundle:
+
+- `plugin/lib/host.ts` resolves the CloudTAK server URL and token and makes authenticated requests (`apiFetch`). `PluginAPI` has no server-URL or authenticated-fetch helper, so this is local to the plugin.
+- `plugin/lib/vendor/MenuTemplate.vue` is a copy of CloudTAK's menu frame. Re-sync it when CloudTAK changes the menu chrome.
+- The host's `cloudtak-app` store is read from `api.pinia` for `isMobileDetected`.
 - Server: `../../common/auth.js`, `../config.js`
+
+## Mobile (CloudTAK iOS/Android app)
+
+The mobile bundle needs **CloudTAK v14.4.1 or newer** (runtime plugins, the same minimum as the compiled Marketplace install).
+
+The native apps only run runtime bundles, not plugins compiled into the web build. The bundle covers the web half only, so **the server routes must still be installed on the CloudTAK server** (the Marketplace install, or the manual steps above) and the API image rebuilt.
+
+1. Build: `npm install && npm run bundle` creates `release/air-aware-<version>.tar.gz` (`manifest.json` + `index.js`). GitHub releases carry the same file.
+2. Upload (CloudTAK admin): `POST /api/plugin/bundle` with the tar.gz.
+3. On the phone: **Settings → Plugins**, then load Air Aware. It is stored on the device and loads offline.
+
+The bundle contains everything except `vue`, `vue-router` and `@tak-ps/vue-tabler`, which the app provides.
 
 ## Development
 
-The plugin is compiled inside CloudTAK. To check it against the latest CloudTAK `main` (ESLint, `vue-tsc`, Vite build, API oxlint and `tsc`):
+The Marketplace install compiles the plugin inside CloudTAK. To check it against the latest CloudTAK `main` (ESLint, `vue-tsc`, Vite build, API oxlint and `tsc`):
 
 ```bash
 bash verify-cloudtak.sh . air-aware

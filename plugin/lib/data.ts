@@ -1,4 +1,4 @@
-import { std } from '../../../src/std.ts';
+import { apiFetch } from './host.ts';
 import { API } from './constants.ts';
 import { fromListRow, parseDetail, validNotamId, type Tfr, type TfrListRow } from './tfr.ts';
 
@@ -31,7 +31,7 @@ export async function manifest(pack: PackName): Promise<Manifest> {
     const hit = manifests.get(pack);
     if (hit && Date.now() - hit.at < MANIFEST_TTL[pack]) return hit.value;
     try {
-        const value = await std(`${API}/pack/${pack}/manifest`) as Manifest;
+        const value = await apiFetch(`${API}/pack/${pack}/manifest`) as Manifest;
         manifests.set(pack, { at: Date.now(), value });
         return value;
     } catch (err) {
@@ -71,7 +71,7 @@ export async function tile<T>(pack: PackName, key: string, m: Manifest): Promise
         tiles.set(id, hit);
         return hit.value as T;
     }
-    const value = await std(`${API}/pack/${pack}/tile/${key}`) as T;
+    const value = await apiFetch(`${API}/pack/${pack}/tile/${key}`) as T;
     tiles.set(id, { at: Date.now(), value });
     while (tiles.size > MAX_TILES) {
         const oldest = tiles.keys().next();
@@ -85,7 +85,7 @@ export async function packFile<T>(pack: PackName, file: string, m: Manifest): Pr
     const id = `${pack}/file/${file}/${m.cycle || m.built || ''}`;
     const hit = tiles.get(id);
     if (hit) return hit.value as T;
-    const value = await std(`${API}/pack/${pack}/file/${file}`) as T;
+    const value = await apiFetch(`${API}/pack/${pack}/file/${file}`) as T;
     tiles.set(id, { at: Date.now(), value });
     return value;
 }
@@ -115,7 +115,7 @@ let tfrList: Timed<Tfr[]> | undefined;
 export async function loadTfrs(): Promise<{ tfrs: Tfr[]; failed: number }> {
     if (tfrList && Date.now() - tfrList.at < 5 * 60_000) return { tfrs: tfrList.value, failed: 0 };
 
-    const rows = await std(`${API}/tfr`) as TfrListRow[];
+    const rows = await apiFetch(`${API}/tfr`) as TfrListRow[];
     const list = (Array.isArray(rows) ? rows : []).map(fromListRow).filter((t) => validNotamId(t.notamId));
     let failed = 0;
     await pool(list, 6, async (t) => {
@@ -125,7 +125,7 @@ export async function loadTfrs(): Promise<{ tfrs: Tfr[]; failed: number }> {
             return;
         }
         try {
-            const res = await std(`${API}/tfr/${t.notamId.replace('/', '_')}`) as { xml: string };
+            const res = await apiFetch(`${API}/tfr/${t.notamId.replace('/', '_')}`) as { xml: string };
             parseDetail(res.xml, t);
             tfrDetails.set(t.notamId, { at: Date.now(), value: t });
         } catch {
@@ -163,7 +163,7 @@ export async function loadMetars(south: number, west: number, north: number, eas
         north: north.toFixed(3),
         east: east.toFixed(3)
     });
-    const rows = await std(`${API}/metar?${q.toString()}`) as MetarRow[];
+    const rows = await apiFetch(`${API}/metar?${q.toString()}`) as MetarRow[];
     return Array.isArray(rows) ? rows : [];
 }
 
@@ -178,7 +178,7 @@ let sfraCache: Timed<SfraFeature[]> | undefined;
 export async function loadSfra(): Promise<SfraFeature[]> {
     if (sfraCache && Date.now() - sfraCache.at < 6 * 3600_000) return sfraCache.value;
     try {
-        const res = await std(`${API}/sfra`) as { features?: SfraFeature[] };
+        const res = await apiFetch(`${API}/sfra`) as { features?: SfraFeature[] };
         const value = Array.isArray(res?.features) ? res.features : [];
         sfraCache = { at: Date.now(), value };
         return value;

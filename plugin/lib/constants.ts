@@ -4,7 +4,7 @@ export const ROUTE_NAME = 'home-menu-plugin-air-aware';
 export const MENU_KEY = 'air-aware';
 export const FLOAT_UID = 'air-aware-details';
 export const PREFIX = 'air-aware';
-export const API = '/api/plugin/air-aware';
+export const API = '/api/plugin/air-aware'; // path on the CloudTAK server; resolved with apiFetch
 
 export type LayerKey = 'tfr' | 'notams' | 'airspace' | 'sua' | 'uasfm' | 'nsufr' | 'obstacles' | 'metars' | 'sfra';
 

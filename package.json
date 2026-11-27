@@ -1,6 +1,6 @@
 {
   "name": "cloudtak-plugin-air-aware",
-  "version": "1.0.6",
+  "version": "2.0.0",
   "type": "module",
   "description": "CloudTAK plugin: TFRs, NOTAMs, airspace, UAS ceilings, UAS no-fly zones, obstacles, METARs and a UAS flight planner. Port of the takwerx AirAware ATAK plugin.",
   "license": "AGPL-3.0-or-later",
@@ -9,9 +9,29 @@
     "url": "https://github.com/ValleyTacticalSolutions/cloudtak-plugin-air-aware.git"
   },
   "cloudtak": {
-    "minVersion": "13.124.0"
+    "minVersion": "14.4.1"
   },
   "scripts": {
-    "verify": "bash verify-cloudtak.sh . air-aware"
+    "verify": "bash verify-cloudtak.sh . air-aware",
+    "build:bundle": "vite build --config vite.bundle.config.ts",
+    "bundle": "npm run build:bundle && node scripts/bundle.mjs"
+  },
+  "cloudtakBundle": {
+    "name": "air-aware",
+    "author": "ValleyTacticalSolutions",
+    "homepage": "https://github.com/ValleyTacticalSolutions/cloudtak-plugin-air-aware"
+  },
+  "devDependencies": {
+    "@tabler/icons-vue": "^3.0.0",
+    "@tak-ps/vue-tabler": "^6.0.0",
+    "@types/geojson": "^7946.0.0",
+    "@vitejs/plugin-vue": "^6.0.0",
+    "maplibre-gl": "^6.16.0",
+    "pinia": "^4.0.0",
+    "typescript": "^5.9.0",
+    "vite": "^8.0.0",
+    "vite-plugin-css-injected-by-js": "^3.5.0",
+    "vue": "^3.5.0",
+    "vue-router": "^5.0.0"
   }
 }

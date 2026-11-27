@@ -2,7 +2,8 @@ import type { App } from 'vue';
 import { h, markRaw } from 'vue';
 import type { PluginAPI, PluginInstance } from '@tak-ps/cloudtak';
 import { IconDrone } from '@tabler/icons-vue';
-import MenuTemplate from '../../src/components/CloudTAK/util/MenuTemplate.vue';
+import MenuTemplate from './lib/vendor/MenuTemplate.vue';
+import { setHost } from './lib/host.ts';
 import AirAwarePanel from './lib/AirAwarePanel.vue';
 import DetailsView from './lib/DetailsView.vue';
 import HeaderButtons from './lib/HeaderButtons.vue';
@@ -17,6 +18,7 @@ export default class AirAware implements PluginInstance {
 
     constructor(api: PluginAPI) {
         this.api = api;
+        setHost(api);
 
         // Registered once and never removed: CloudTAK may call disable() before enable(),
         // and menu.add silently fails if its route is missing.
@@ -80,7 +82,7 @@ export default class AirAware implements PluginInstance {
             uid: FLOAT_UID,
             name: 'Air Aware Details',
             component: markRaw(DetailsView),
-            width: 360,
+            width: Math.min(360, Math.max(280, window.innerWidth - 16)),
             height: 420
         });
     }

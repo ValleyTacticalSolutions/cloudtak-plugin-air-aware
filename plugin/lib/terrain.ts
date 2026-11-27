@@ -8,7 +8,7 @@
  *   3. MapLibre's own terrain, when 3D terrain is on (queryTerrainElevation)
  */
 import type { Map as MLMap, RasterDEMTileSource } from 'maplibre-gl';
-import { std, stdurl, getRuntimeToken } from '../../../src/std.ts';
+import { apiFetch, apiUrl, serverUrl, token as getToken } from './host.ts';
 import { FT_PER_M } from './geo.ts';
 
 type Encoding = 'terrarium' | 'mapbox';
@@ -71,16 +71,16 @@ let defaultSource: Promise<DemSource | null> | undefined;
 function serverDefault(): Promise<DemSource | null> {
     if (!defaultSource) {
         defaultSource = (async (): Promise<DemSource | null> => {
-            const cfg = await std('/api/config?keys=map::terrain') as Record<string, unknown>;
+            const cfg = await apiFetch('/api/config?keys=map::terrain') as Record<string, unknown>;
             const id = Number(cfg['map::terrain']);
             if (!id || id < 1) return null;
-            const token = await getRuntimeToken();
+            const token = await getToken();
             const q = token ? `?token=${encodeURIComponent(token)}` : '';
             // CloudTAK v14 serves basemap tiles from the PMTiles tile server
-            const tileCfg = await std('/api/config/tiles') as { url?: string };
+            const tileCfg = await apiFetch('/api/config/tiles') as { url?: string };
             if (!tileCfg.url) return null;
             const base = tileCfg.url.replace(/\/$/, '');
-            const tj = await std(`${base}/tiles/basemap/${id}/tiles${q}`) as TileJSONish;
+            const tj = await apiFetch(`${base}/tiles/basemap/${id}/tiles${q}`) as TileJSONish;
             const tiles = Array.isArray(tj.tiles) && tj.tiles.length ? tj.tiles : [`${base}/tiles/basemap/${id}/tiles/{z}/{x}/{y}${q}`];
             return {
                 label: `default terrain basemap ${id}`,
@@ -104,11 +104,11 @@ function tileUrl(src: DemSource, z: number, x: number, y: number): string {
 
 async function fetchTile(url: string): Promise<ImageData | null> {
     let blob: Blob;
-    const abs = stdurl(url);
-    if (abs.origin === stdurl('/').origin) {
-        // CloudTAK's own API: std adds the session token.
-        const res = await std(abs) as Response;
-        if (!(res instanceof Response)) return null;
+    const abs = await apiUrl(url);
+    if (abs.origin === new URL(await serverUrl()).origin) {
+        // CloudTAK's own API: add the session token (the page origin is the app on native).
+        const res = await apiFetch(abs.toString(), { raw: true });
+        if (!res.ok) return null;
         blob = await res.blob();
     } else {
         // A separate tile host: the URL already carries its token, as MapLibre uses it.

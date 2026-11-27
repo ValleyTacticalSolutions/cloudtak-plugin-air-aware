@@ -9,6 +9,7 @@ import {
 } from './geo.ts';
 import { airportName, obstacleDetail, ICON_HOME, ICON_TARGET, type AirAwareLayers, type ObstacleRow, type PlanHazardKind } from './layers.ts';
 import { runtime } from './runtime.ts';
+import { clearWeather } from './weather.ts';
 import { fmtDist, fmtH } from './units.ts';
 import { state, type Detail, type PlanObstacle, type PlanResult, type PlanUasCell } from './store.ts';
 
@@ -372,6 +373,7 @@ export function clearPlan(): void {
     state.plan.picking = false;
     state.plan.result = undefined;
     state.plan.computing = false;
+    clearWeather();
     if (runtime.map) runtime.map.getCanvas().style.cursor = '';
     runtime.layers?.setPlanHazards({ type: 'FeatureCollection', features: [] });
     runtime.layers?.setIslands({ type: 'FeatureCollection', features: [] });

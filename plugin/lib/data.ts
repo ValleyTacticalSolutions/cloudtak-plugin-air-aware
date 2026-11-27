@@ -145,6 +145,10 @@ export interface MetarRow {
     fltCat?: string;
     rawOb?: string;
     reportTime?: string;
+    /** Observation time, seconds since the epoch. */
+    obsTime?: number;
+    /** Present weather groups, e.g. "-RA BR". */
+    wxString?: string;
     temp?: number;
     dewp?: number;
     wdir?: number | string;
